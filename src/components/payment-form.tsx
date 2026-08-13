@@ -73,9 +73,15 @@ export function PaymentForm({
   // Menebak otomatis di sini akan lebih sering salah daripada benar.
   const [period, setPeriod] = useState(nextPeriod);
 
+  // Pilihan cepat: beberapa nominal lazim, ditambah target bulanan kalau sudah
+  // disetel. Nilai nol disaring — pada pemasangan tanpa konfigurasi awal,
+  // monthlyTarget bernilai 0 dan akan muncul sebagai tombol "0" yang tidak
+  // berguna sekaligus tampak terpilih karena kolomnya memang masih kosong.
   const chips = Array.from(
-    new Set([3_000_000, monthlyTarget, 10_000_000, 20_000_000]),
-  ).sort((a, b) => a - b);
+    new Set([3_000_000, 5_000_000, 10_000_000, 20_000_000, monthlyTarget]),
+  )
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b);
 
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-4">
@@ -92,8 +98,13 @@ export function PaymentForm({
             <MoneyInput id="amount" name="amount" chips={chips} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
+          {/* Ditumpuk di layar sempit. Kolom tanggal bawaan peramban punya
+              lebar minimum sendiri yang berbeda-beda antar sistem — di iOS
+              lebih lebar dari Chrome — dan dua di antaranya berdampingan pada
+              layar ponsel bisa saling menimpa. Berdampingan baru dipakai mulai
+              lebar tablet. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="paidAt">Tanggal transfer</Label>
               <Input
                 id="paidAt"
@@ -105,7 +116,7 @@ export function PaymentForm({
                 className="tap h-12"
               />
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="period">Bulan cicilan</Label>
               <Input
                 id="period"
@@ -120,7 +131,7 @@ export function PaymentForm({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="type">Jenis</Label>
               {/* `items` memetakan nilai enum ke label; tanpa ini pemicunya
                   menampilkan "CICILAN" mentah, bukan "Cicilan". */}
@@ -142,7 +153,7 @@ export function PaymentForm({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="installmentNo">Cicilan ke-</Label>
               <Input
                 id="installmentNo"

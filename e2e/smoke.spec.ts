@@ -241,3 +241,36 @@ test("kolom password punya tombol lihat/sembunyi", async ({ page }) => {
   // Tombolnya tidak boleh ikut mengirim formulir.
   await expect(page).toHaveURL(/\/login/);
 });
+
+test("form input tidak tumpang tindih di layar ponsel sempit", async ({ browser }) => {
+  // 320px adalah lebar ponsel paling sempit yang masih wajar dipakai.
+  // Kolom tanggal bawaan peramban punya lebar minimum sendiri; kalau dua di
+  // antaranya dipaksa berdampingan di lebar segini, keduanya saling menimpa.
+  const ctx = await browser.newContext({
+    viewport: { width: 320, height: 800 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await ctx.newPage();
+  await page.goto("/login");
+  await page.getByLabel("Username").fill(ADMIN.username);
+  await page.getByLabel("Password", { exact: true }).fill(ADMIN.newPassword);
+  await page.getByRole("button", { name: "Masuk" }).click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
+
+  await page.goto("/input");
+  const tanggal = (await page.locator("#paidAt").boundingBox())!;
+  const bulan = (await page.locator("#period").boundingBox())!;
+
+  const bersinggunganX = tanggal.x < bulan.x + bulan.width && bulan.x < tanggal.x + tanggal.width;
+  const bersinggunganY = tanggal.y < bulan.y + bulan.height && bulan.y < tanggal.y + tanggal.height;
+  expect(bersinggunganX && bersinggunganY, "kolom tanggal tidak boleh saling menimpa").toBe(false);
+
+  // Dan halaman tidak boleh bisa digeser mendatar.
+  const lebarGulir = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(lebarGulir, "halaman tidak boleh melebar dari layar").toBeLessThanOrEqual(320);
+
+  // Tombol pilihan cepat tidak boleh memuat nilai nol.
+  await expect(page.getByRole("button", { name: "0", exact: true })).toHaveCount(0);
+  await ctx.close();
+});

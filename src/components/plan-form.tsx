@@ -66,8 +66,8 @@ export function PlanForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="startPeriod">Mulai bulan</Label>
               <Input
                 id="startPeriod"
@@ -78,7 +78,7 @@ export function PlanForm({
                 className="tap h-12"
               />
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="months">Berapa bulan</Label>
               <Input
                 id="months"
