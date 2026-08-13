@@ -1,0 +1,15 @@
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Batas unggah aplikasi 10 MB; diberi kelonggaran untuk overhead multipart.
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy app:3000
+
+	log {
+		output stdout
+		format console
+	}
+}

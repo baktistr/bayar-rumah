@@ -1,36 +1,176 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BayarRumah
 
-## Getting Started
+Aplikasi monitoring pembayaran rumah ke mertua. Mobile-first, self-hosted di
+Docker, dua pengguna: **admin** (mencatat) dan **viewer** (melihat).
 
-First, run the development server:
+Rancangan lengkap dan alasan di balik keputusannya ada di [PLAN.md](PLAN.md).
+
+---
+
+## Konsep yang perlu dipahami dulu
+
+**Setiap transaksi punya status `LUNAS` atau `RENCANA`.** Ini inti aplikasinya.
+Catatan manual sebelumnya mencampur "sudah ditransfer" dengan "dijadwalkan",
+sehingga angka Rp 1.108.550.000 yang tertulis sebagai posisi 13 Agustus 2026
+sebenarnya adalah proyeksi setelah cicilan Desember 2026.
+
+Di aplikasi:
+
+- **Sisa hutang** hanya menghitung baris `LUNAS`.
+- **Sisa bila semua rencana terbayar** menghitung `RENCANA` juga, ditampilkan
+  terpisah dan tidak pernah dicampur.
+
+Seed awal memuat cicilan 9–15 sebagai `LUNAS` sesuai catatan asli, jadi saldo
+awal aplikasi = **Rp 1.108.550.000**. Baris yang tanggal transfernya masih di
+depan diberi tanda `pra-catat` di Riwayat, dan bukti transfernya bisa dilampirkan
+menyusul.
+
+**Semua perubahan tercatat.** Menghapus transaksi tidak benar-benar menghapus
+barisnya (soft delete), dan setiap pembuatan/perubahan masuk ke jejak audit yang
+bisa dilihat kedua pengguna di halaman detail transaksi.
+
+---
+
+## Menjalankan di VPS
+
+Prasyarat: Docker + Docker Compose, dan **A record domain sudah mengarah ke IP
+VPS**. Caddy menerbitkan sertifikat lewat verifikasi HTTP-01, jadi kalau DNS
+belum propagasi saat container pertama kali start, penerbitannya gagal.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repo> bayar-rumah && cd bayar-rumah
+
+cp .env.example .env
+# Isi AUTH_SECRET dan DOMAIN. Buat secret dengan:
+openssl rand -base64 32
+
+mkdir -p data
+docker compose --profile proxy up -d --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka `https://<DOMAIN>`. Login dengan kredensial dari `.env`; keduanya wajib
+ganti password pada login pertama sebelum bisa masuk ke aplikasi.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Kalau `ADMIN_PASSWORD`/`VIEWER_PASSWORD` dikosongkan, password acak dibuat dan
+dicetak **satu kali** ke log:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+docker compose logs app | head -30
+```
 
-## Learn More
+### Kalau uid host bukan 1000
 
-To learn more about Next.js, take a look at the following resources:
+Container menulis ke `./data` sebagai uid 1000. Cek uid Anda dengan `id -u`;
+kalau berbeda, tambahkan ke `.env`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+PUID=1001
+PGID=1001
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Tanpa domain (uji coba lokal)
 
-## Deploy on Vercel
+```bash
+docker compose up -d --build        # tanpa --profile proxy
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Aplikasi tersedia di `http://127.0.0.1:3000`. Untuk HTTP polos, sesi butuh
+`COOKIE_SECURE=false` di `.env` — jangan dipakai di server yang terekspos.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Pengembangan lokal
+
+```bash
+npm install
+cp .env.example .env.local        # isi AUTH_SECRET
+npm run db:migrate                # migrasi + seed data awal
+npm run dev
+```
+
+| Perintah | Fungsi |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` | Build produksi + bundel skrip bootstrap |
+| `npm run db:migrate` | Jalankan migrasi lalu seed (idempoten) |
+| `npm run db:generate` | Buat berkas migrasi baru setelah mengubah skema |
+| `npm run check` | Cetak ringkasan ledger + uji konsistensi angka |
+| `npm run e2e` | Uji end-to-end Playwright terhadap image Docker |
+| `npx tsc --noEmit` | Typecheck |
+| `npx eslint src` | Lint |
+
+`npm run check` berguna setelah restore backup atau kapan pun angka di layar
+terasa meragukan — ia membandingkan jumlah transaksi dengan total terbayar dan
+jumlah jadwal proyeksi dengan sisa hutang.
+
+---
+
+## Cadangan
+
+Semua state ada di satu folder: `./data` (`app.db` + `uploads/`).
+
+```bash
+./scripts/backup.sh
+```
+
+Membuat snapshot konsisten via `VACUUM INTO` — bukan menyalin `app.db` mentah,
+yang bisa kehilangan transaksi terbaru karena SQLite berjalan dalam mode WAL —
+plus arsip bukti transfer. Hasilnya di `data/backups/`, disimpan 30 hari.
+
+Untuk cadangan harian otomatis, pasang di cron host:
+
+```
+0 2 * * * cd /srv/bayar-rumah && ./scripts/backup.sh >> data/backup.log 2>&1
+```
+
+Admin juga bisa mengunduh cadangan sewaktu-waktu lewat **Akun → Pengaturan**.
+
+### Memulihkan
+
+```bash
+docker compose down
+cp data/backups/app-YYYYMMDD-HHMMSS.db data/app.db
+tar -xzf data/backups/uploads-YYYYMMDD-HHMMSS.tar.gz -C data
+docker compose --profile proxy up -d
+npm run check     # pastikan angkanya utuh
+```
+
+---
+
+## Catatan keamanan
+
+- Bukti transfer **tidak** disimpan di folder publik. Aksesnya lewat
+  `/api/bukti/[id]` yang memeriksa sesi lebih dulu, dan menjawab 404 (bukan 403)
+  bila tidak berhak, supaya keberadaan berkas pun tidak bocor.
+- Berkas unggahan divalidasi lewat magic bytes, bukan ekstensi atau
+  `Content-Type` yang keduanya dikirim klien. Nama berkas diganti UUID buatan
+  server, dan metadata EXIF termasuk koordinat GPS dibuang oleh sharp.
+- Peran diperiksa di server pada setiap Server Action. Menyembunyikan tombol di
+  UI tidak dianggap sebagai pengamanan.
+- Login dibatasi 5 percobaan per 15 menit per IP.
+- Password disimpan dengan scrypt (`node:crypto`), tanpa dependency eksternal.
+- Tidak ada analytics atau telemetri pihak ketiga.
+
+---
+
+## Struktur
+
+```
+src/
+├─ app/
+│  ├─ (app)/          Halaman di balik login: beranda, riwayat, input, proyeksi, akun
+│  ├─ actions/        Server Actions — semua penulisan data lewat sini
+│  ├─ api/            health, bukti (terproteksi), export CSV, backup
+│  └─ login/
+├─ components/        UI, termasuk charts/ dan komponen shadcn di ui/
+├─ db/                Skema Drizzle, klien SQLite, migrasi, seed
+├─ lib/               ledger (perhitungan saldo), projection (proyeksi lunas),
+│                     money, period, auth, session, password, uploads, audit
+└─ proxy.ts           Gerbang sesi tingkat request
+e2e/                  Uji Playwright
+drizzle/              Berkas migrasi SQL
+```
+
+Perhitungan inti terpisah dari database dan React: `lib/projection.ts` adalah
+fungsi murni, sehingga simulator di halaman Proyeksi memakai kode yang sama
+persis dengan proyeksi di server, tanpa duplikasi rumus.

@@ -1,0 +1,16 @@
+node_modules
+.next
+dist
+data
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+npm-debug.log*
+README.md
+PLAN.md
+.vscode
+.idea
+*.md
+!README.md

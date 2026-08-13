@@ -1,0 +1,37 @@
+services:
+  app:
+    build: .
+    image: bayar-rumah
+    restart: unless-stopped
+    env_file: .env
+    # Harus cocok dengan pemilik folder ./data di host, jika bukan uid 1000.
+    # Cek dengan: id -u && id -g
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes:
+      # Seluruh state aplikasi ada di satu folder: app.db + uploads.
+      # Cadangan = mengarsipkan folder ini.
+      - ./data:/app/data
+    ports:
+      # Hanya loopback. Akses dari luar lewat Caddy, tidak langsung ke sini.
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["proxy"]
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN wajib diisi di .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:
