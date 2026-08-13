@@ -13,7 +13,7 @@ test.describe.configure({ mode: "serial" });
 async function loginSebagaiAdmin(page: Page, password = ADMIN.password) {
   await page.goto("/login");
   await page.getByLabel("Username").fill(ADMIN.username);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Masuk" }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
@@ -85,7 +85,7 @@ test("viewer yang dibuat harus ganti password dan tidak bisa menulis", async ({
   const ibu = await ctxIbu.newPage();
   await ibu.goto("/login");
   await ibu.getByLabel("Username").fill("ibu");
-  await ibu.getByLabel("Password").fill("serambi-hujan-8172");
+  await ibu.getByLabel("Password", { exact: true }).fill("serambi-hujan-8172");
   await ibu.getByRole("button", { name: "Masuk" }).click();
 
   // Password dari admin bersifat sementara — wajib diganti pemiliknya.
@@ -107,7 +107,7 @@ test("menonaktifkan akun langsung memutus sesinya", async ({ browser }) => {
   const ibu = await ctxIbu.newPage();
   await ibu.goto("/login");
   await ibu.getByLabel("Username").fill("ibu");
-  await ibu.getByLabel("Password").fill("kopi-sore-7734");
+  await ibu.getByLabel("Password", { exact: true }).fill("kopi-sore-7734");
   await ibu.getByRole("button", { name: "Masuk" }).click();
   await ibu.waitForURL((url) => !url.pathname.startsWith("/login"));
 
@@ -131,7 +131,7 @@ test("menonaktifkan akun langsung memutus sesinya", async ({ browser }) => {
 
   // Dan tentu saja tidak bisa login lagi.
   await ibu.getByLabel("Username").fill("ibu");
-  await ibu.getByLabel("Password").fill("kopi-sore-7734");
+  await ibu.getByLabel("Password", { exact: true }).fill("kopi-sore-7734");
   await ibu.getByRole("button", { name: "Masuk" }).click();
   await expect(ibu.getByText("Username atau password salah.")).toBeVisible();
 

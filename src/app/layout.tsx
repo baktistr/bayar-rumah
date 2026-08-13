@@ -20,10 +20,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#101619" },
-  ],
+  // Satu warna saja, mengikuti tema bawaan yang terang. Menautkannya ke
+  // preferensi sistem akan membuat bilah browser gelap sementara halamannya
+  // terang — sambungan yang justru terlihat salah.
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
   // Zoom tetap diizinkan: bukti transfer perlu diperbesar, dan mengunci
@@ -35,14 +35,19 @@ export const viewport: Viewport = {
 /**
  * Dijalankan sebelum paint pertama supaya tema gelap tidak berkedip putih
  * sesaat saat halaman dibuka.
+ *
+ * Bawaannya TERANG, bukan mengikuti preferensi sistem. Banyak ponsel menyalakan
+ * mode gelap otomatis di malam hari, dan pengguna yang tidak pernah sengaja
+ * memilihnya akan mendapati aplikasi ini berubah rupa sendiri — membingungkan
+ * untuk sesuatu yang dibuka sebulan sekali. Tema gelap tetap ada, tapi harus
+ * dipilih lewat tombol di header, dan pilihan itu diingat.
  */
 const themeScript = `
 (function() {
   try {
-    var stored = localStorage.getItem("br-theme");
-    var dark = stored ? stored === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    if (dark) document.documentElement.classList.add("dark");
+    if (localStorage.getItem("br-theme") === "dark") {
+      document.documentElement.classList.add("dark");
+    }
   } catch (e) {}
 })();
 `;

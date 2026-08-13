@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { changePasswordAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
 
 function Submit() {
@@ -41,10 +41,9 @@ export function ChangePasswordForm() {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="acc-current">Password saat ini</Label>
-            <Input
+            <PasswordInput
               id="acc-current"
               name="current"
-              type="password"
               autoComplete="current-password"
               required
               className="tap h-11"
@@ -52,10 +51,9 @@ export function ChangePasswordForm() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="acc-next">Password baru</Label>
-            <Input
+            <PasswordInput
               id="acc-next"
               name="next"
-              type="password"
               autoComplete="new-password"
               required
               minLength={12}
@@ -67,10 +65,9 @@ export function ChangePasswordForm() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="acc-confirm">Ulangi password baru</Label>
-            <Input
+            <PasswordInput
               id="acc-confirm"
               name="confirm"
-              type="password"
               autoComplete="new-password"
               required
               minLength={12}

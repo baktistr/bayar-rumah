@@ -8,7 +8,7 @@ import { AlertCircleIcon, KeyRoundIcon, LoaderCircleIcon } from "lucide-react";
 import { changePasswordAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
 import { Label } from "@/components/ui/label";
 
 function Submit() {
@@ -49,10 +49,9 @@ export function ForcePasswordChange({ name }: { name: string }) {
             <form action={formAction} className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="current">Password saat ini</Label>
-                <Input
+                <PasswordInput
                   id="current"
                   name="current"
-                  type="password"
                   autoComplete="current-password"
                   required
                   className="tap h-12 text-base"
@@ -60,10 +59,9 @@ export function ForcePasswordChange({ name }: { name: string }) {
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="next">Password baru</Label>
-                <Input
+                <PasswordInput
                   id="next"
                   name="next"
-                  type="password"
                   autoComplete="new-password"
                   required
                   minLength={12}
@@ -78,10 +76,9 @@ export function ForcePasswordChange({ name }: { name: string }) {
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="confirm">Ulangi password baru</Label>
-                <Input
+                <PasswordInput
                   id="confirm"
                   name="confirm"
-                  type="password"
                   autoComplete="new-password"
                   required
                   minLength={12}

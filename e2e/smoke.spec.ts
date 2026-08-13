@@ -38,7 +38,7 @@ const VIEWER = { name: "Ibu", username: "ibu", password: "serambi-hujan-8172", n
 async function submitLogin(page: Page, username: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Masuk" }).click();
 }
 
@@ -192,4 +192,52 @@ test("proyeksi: simulator mengubah tanggal lunas", async ({ page }) => {
   for (let i = 0; i < 10; i += 1) await slider.press("ArrowRight");
 
   await expect(page.getByText(/lebih cepat/)).toBeVisible();
+});
+
+test("tema bawaan terang walau ponsel disetel gelap", async ({ browser }) => {
+  // Meniru ponsel yang mode gelapnya menyala otomatis di malam hari.
+  const ctx = await browser.newContext({ colorScheme: "dark" });
+  const page = await ctx.newPage();
+  await page.goto("/login");
+
+  await expect(
+    page.locator("html"),
+    "preferensi sistem tidak boleh menentukan tema",
+  ).not.toHaveClass(/dark/);
+
+  // Tema gelap tetap bisa dipilih, dan pilihannya diingat.
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password", { exact: true }).fill(ADMIN.newPassword);
+  await page.getByRole("button", { name: "Masuk" }).click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
+
+  await page.getByRole("button", { name: /Ganti tema/ }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+
+  await page.reload();
+  await expect(page.locator("html"), "pilihan tema harus diingat").toHaveClass(/dark/);
+
+  await page.getByRole("button", { name: /Ganti tema/ }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  await ctx.close();
+});
+
+test("kolom password punya tombol lihat/sembunyi", async ({ page }) => {
+  await page.goto("/login");
+  const field = page.getByLabel("Password", { exact: true });
+  const toggle = page.getByRole("button", { name: "Tampilkan password" });
+
+  await field.fill("rahasia-yang-panjang-8811");
+  await expect(field).toHaveAttribute("type", "password");
+
+  await toggle.click();
+  await expect(field).toHaveAttribute("type", "text");
+  // Nilainya tidak boleh ikut berubah saat ditampilkan.
+  await expect(field).toHaveValue("rahasia-yang-panjang-8811");
+
+  await page.getByRole("button", { name: "Sembunyikan password" }).click();
+  await expect(field).toHaveAttribute("type", "password");
+
+  // Tombolnya tidak boleh ikut mengirim formulir.
+  await expect(page).toHaveURL(/\/login/);
 });
