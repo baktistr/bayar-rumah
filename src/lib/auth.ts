@@ -54,12 +54,27 @@ export async function requireUser(): Promise<SessionUser> {
 /**
  * Gerbang tulis. Dipanggil di setiap Server Action yang mengubah data —
  * menyembunyikan tombol di UI saja tidak menghentikan request buatan tangan.
+ *
+ * Kewajiban ganti password diperiksa di sini juga, bukan hanya di layout.
+ * Layout hanya menentukan apa yang DIGAMBAR; Server Action adalah endpoint
+ * tersendiri yang tidak melewatinya. Tanpa pemeriksaan ini, pemegang password
+ * sementara — yang untuk admin pertama sempat tercetak di log container — bisa
+ * mengubah ledger tanpa pernah melewati layar ganti password.
  */
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await requireUser();
   if (user.role !== "ADMIN") {
     throw new Error("Hanya admin yang boleh mengubah data.");
   }
+
+  const row = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { mustChangePassword: true },
+  });
+  if (row?.mustChangePassword) {
+    throw new Error("Ganti password bawaan dulu sebelum mengubah data.");
+  }
+
   return user;
 }
 

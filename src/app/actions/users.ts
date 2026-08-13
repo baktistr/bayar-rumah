@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -36,23 +36,23 @@ function refresh() {
 }
 
 /**
- * Berapa admin aktif yang tersisa selain pengguna tertentu.
+ * Syarat SQL: masih ada admin aktif LAIN selain pengguna ini.
  *
- * Dipakai sebagai pagar terhadap dua cara mengunci diri sendiri keluar dari
- * aplikasi: menurunkan peran admin terakhir menjadi viewer, dan menonaktifkan
- * admin terakhir. Keduanya menghasilkan sistem yang tidak bisa lagi menambah
- * pengguna atau mencatat pembayaran, dan satu-satunya jalan keluarnya adalah
- * mengutak-atik database langsung.
+ * Sengaja berupa kondisi di dalam perintah UPDATE, bukan pemeriksaan terpisah
+ * sebelumnya. Pola "SELECT dulu, baru UPDATE" bisa dilewati dua permintaan
+ * yang berjalan bersamaan: masing-masing menonaktifkan admin yang berbeda,
+ * keduanya melihat masih ada satu admin lain, dan keduanya lolos — menyisakan
+ * nol admin. Digabung jadi satu perintah, SQLite mengeksekusinya atomik,
+ * sehingga yang kedua tidak mengubah baris apa pun.
+ *
+ * Ini penting karena aplikasi ini tidak punya panel pemulihan: kehilangan
+ * admin terakhir berarti harus menyunting database langsung di server.
  */
-async function otherActiveAdmins(exceptId: number): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(users)
-    .where(
-      and(eq(users.role, "ADMIN"), isNull(users.deletedAt), ne(users.id, exceptId)),
-    );
-  return row?.count ?? 0;
-}
+const adminLainMasihAda = (exceptId: number) =>
+  sql`exists (
+    select 1 from users u2
+    where u2.role = 'ADMIN' and u2.deleted_at is null and u2.id <> ${exceptId}
+  )`;
 
 export async function listUsers() {
   await requireAdmin();
@@ -149,11 +149,6 @@ export async function updateUserAction(
   }
 
   const turunDariAdmin = before.role === "ADMIN" && parsed.data.role !== "ADMIN";
-  if (turunDariAdmin && (await otherActiveAdmins(id)) === 0) {
-    return {
-      error: "Ini satu-satunya admin yang aktif. Buat admin lain dulu sebelum menurunkan perannya.",
-    };
-  }
   if (turunDariAdmin && id === admin.id) {
     return { error: "Tidak bisa menurunkan peranmu sendiri. Minta admin lain melakukannya." };
   }
@@ -161,14 +156,25 @@ export async function updateUserAction(
   // Perubahan peran mencabut sesi yang sedang berjalan, supaya peran barunya
   // berlaku seketika dan bukan menunggu dia login ulang.
   const roleChanged = before.role !== parsed.data.role;
-  await db
+  const hasil = db
     .update(users)
     .set({
       name: parsed.data.name,
       role: parsed.data.role,
       sessionVersion: roleChanged ? before.sessionVersion + 1 : before.sessionVersion,
     })
-    .where(eq(users.id, id));
+    .where(
+      turunDariAdmin
+        ? and(eq(users.id, id), adminLainMasihAda(id))
+        : eq(users.id, id),
+    )
+    .run();
+
+  if (hasil.changes === 0) {
+    return {
+      error: "Ini satu-satunya admin yang aktif. Buat admin lain dulu sebelum menurunkan perannya.",
+    };
+  }
 
   await logAudit({
     actor: admin,
@@ -232,23 +238,26 @@ export async function setUserActiveAction(
   const target = await db.query.users.findFirst({ where: eq(users.id, id) });
   if (!target) return { error: "Pengguna tidak ditemukan." };
 
-  if (!active) {
-    if (id === admin.id) {
-      return { error: "Tidak bisa menonaktifkan akunmu sendiri." };
-    }
-    if (target.role === "ADMIN" && (await otherActiveAdmins(id)) === 0) {
-      return { error: "Ini satu-satunya admin yang aktif — tidak bisa dinonaktifkan." };
-    }
+  if (!active && id === admin.id) {
+    return { error: "Tidak bisa menonaktifkan akunmu sendiri." };
   }
 
-  await db
+  const perluPagarAdmin = !active && target.role === "ADMIN";
+  const hasil = db
     .update(users)
     .set({
       deletedAt: active ? null : Date.now(),
       // Menonaktifkan harus langsung memutus sesi yang sedang berjalan.
       sessionVersion: target.sessionVersion + 1,
     })
-    .where(eq(users.id, id));
+    .where(
+      perluPagarAdmin ? and(eq(users.id, id), adminLainMasihAda(id)) : eq(users.id, id),
+    )
+    .run();
+
+  if (hasil.changes === 0) {
+    return { error: "Ini satu-satunya admin yang aktif — tidak bisa dinonaktifkan." };
+  }
 
   await logAudit({
     actor: admin,

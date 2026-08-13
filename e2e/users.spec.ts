@@ -167,3 +167,36 @@ test("admin terakhir tidak bisa mengunci dirinya sendiri keluar", async ({ page 
     "admin terakhir tidak boleh berhasil turun peran",
   ).toHaveCount(0);
 });
+
+test("pagar admin terakhir ada di server, bukan cuma di UI", async ({ page }) => {
+  // Skenario: dua admin, salah satunya diturunkan perannya. Yang tersisa
+  // tidak boleh bisa diturunkan juga — kalau bisa, aplikasi kehilangan
+  // seluruh aksesnya dan hanya bisa dipulihkan lewat database di server.
+  await loginSebagaiAdmin(page, "lentera-pagi-5520");
+
+  await page.goto("/pengguna");
+  await page.getByRole("button", { name: "Tambah pengguna" }).click();
+  await page.getByLabel("Nama").fill("Admin Dua");
+  await page.getByLabel("Username").fill("admin2");
+  await page.getByLabel("Peran").click();
+  await page.getByRole("option", { name: "Admin" }).click();
+  await page.getByLabel("Password sementara").fill("cendana-kirana-7781");
+  await page.getByRole("button", { name: "Buat pengguna" }).click();
+  await expect(page.getByText("@admin2")).toBeVisible();
+
+  // Turunkan admin kedua — boleh, karena masih ada admin lain.
+  const kartuDua = page.locator('[data-user="admin2"]');
+  await kartuDua.getByRole("button", { name: "Ubah" }).click();
+  await page.getByLabel("Peran").click();
+  await page.getByRole("option", { name: "Hanya lihat" }).click();
+  await page.getByRole("button", { name: "Simpan" }).click();
+  await expect(page.getByText("Perubahan tersimpan.")).toBeVisible();
+
+  // Sekarang tinggal satu admin. Menonaktifkannya harus ditolak server.
+  page.on("dialog", (d) => d.accept());
+  await page.goto("/pengguna");
+  await expect(
+    page.locator('[data-user="admin"]').getByRole("button", { name: "Nonaktifkan" }),
+  ).toBeDisabled();
+  await expect(page.locator('[data-user="admin2"]').getByText("Hanya lihat")).toBeVisible();
+});

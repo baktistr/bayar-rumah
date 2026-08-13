@@ -166,9 +166,16 @@ in". A deactivated account cannot log in and is signed out of every device
 immediately.
 
 Two lockouts are blocked server-side, not just hidden in the UI: you cannot
-deactivate your own account, and you cannot demote the last active admin. There
-is no recovery panel — losing the last admin means editing the database on the
-server.
+deactivate your own account, and you cannot demote the last active admin. The
+last-admin guard is a condition inside the `UPDATE` rather than a separate check
+beforehand, so two simultaneous requests can't each see "one other admin left"
+and both succeed. There is no recovery panel — losing the last admin means
+editing the database on the server.
+
+An admin can reset any other account's password, including another admin's.
+That is deliberate for a household of two or three people, but it does mean
+admins can take over each other's accounts; the audit trail is what makes it
+visible.
 
 Changing a role or resetting a password revokes that user's sessions at once.
 
@@ -190,6 +197,10 @@ Changing a role or resetting a password revokes that user's sessions at once.
   Filenames are server-generated UUIDs and EXIF — including GPS — is stripped.
   PDFs are forced to download, because browser PDF viewers execute JavaScript.
 - Roles are enforced server-side in every Server Action, not by hiding buttons.
+  The forced first-login password change is enforced there too — a Server Action
+  is its own endpoint and does not pass through the layout that renders the
+  prompt, so checking it only in the UI would leave the temporary password
+  usable for writes.
 - CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, `noindex`.
 - No third-party analytics or telemetry.
 
