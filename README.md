@@ -1,289 +1,199 @@
 # BayarRumah
 
-Aplikasi monitoring cicilan rumah untuk pinjaman keluarga — tanpa bunga, jangka
-panjang, dicatat berdua. Mobile-first, self-hosted di Docker, dua pengguna:
-**admin** (mencatat) dan **viewer** (melihat).
+Installment tracker for an interest-free family house loan. Mobile-first,
+self-hosted, two users: an **admin** who records payments and a **viewer** who
+can only look.
 
-> Repositori ini tidak memuat data keuangan apa pun. Seluruh angka — saldo,
-> riwayat cicilan, target bulanan — datang dari environment variable saat
-> database pertama kali dibuat, lalu dikelola lewat aplikasi. Lihat
-> [`.env.example`](.env.example).
+> This repository contains no financial data. Every figure — opening balance,
+> payment history, monthly target — comes from environment variables when the
+> database is first created, then lives in the app. See [`.env.example`](.env.example).
 
----
-
-## Konsep yang perlu dipahami dulu
-
-**Setiap transaksi punya status `LUNAS` atau `RENCANA`.** Ini inti aplikasinya.
-
-Catatan manual gampang mencampur "sudah ditransfer" dengan "sudah dijadwalkan",
-dan begitu tercampur, satu angka saldo bisa berarti dua hal berbeda tergantung
-siapa yang membacanya. Di aplikasi keduanya tidak pernah bercampur:
-
-- **Sisa hutang** hanya menghitung baris `LUNAS`.
-- **Sisa bila semua rencana terbayar** menghitung `RENCANA` juga, ditampilkan
-  terpisah.
-
-Baris berstatus `LUNAS` yang tanggal transfernya masih di depan — misalnya
-cicilan yang sudah dicatat di muka — ditandai `pra-catat` di Riwayat, dan bukti
-transfernya bisa dilampirkan menyusul.
-
-**Semua perubahan tercatat.** Menghapus transaksi tidak benar-benar menghapus
-barisnya (soft delete), dan setiap pembuatan/perubahan masuk ke jejak audit yang
-bisa dilihat kedua pengguna di halaman detail transaksi.
+The interface is in Indonesian.
 
 ---
 
-## Kebutuhan sumber daya
+## The one concept that matters
 
-Diukur pada image produksi, bukan perkiraan:
+Every transaction is either **`LUNAS`** (paid) or **`RENCANA`** (scheduled).
+They are never mixed:
 
-| | |
-|---|---|
-| Image Docker | 297 MB |
-| RAM saat idle | ~55 MB |
-| RAM pemakaian normal | ~120–145 MB |
-| RAM puncak (memproses foto 12 MP) | ~131 MB |
-| CPU | ~0% idle, sekejap naik saat memproses foto |
-| Unggah foto 12 MP (kompresi HP → tersimpan) | ~0,6 detik |
+- **Sisa hutang** counts `LUNAS` rows only.
+- **Sisa bila semua rencana terbayar** adds `RENCANA`, shown separately.
 
-**VPS 1 GB RAM sudah lapang** — termasuk Caddy (~15 MB) dan sistem operasinya.
-512 MB pun masih cukup, meski tanpa banyak ruang bernapas.
+Handwritten notes tend to blur these two, and once blurred a single balance
+figure means different things to different readers.
 
-Disk: database berukuran beberapa ratus KB bahkan setelah ratusan transaksi.
-Yang tumbuh adalah bukti transfer — sekitar 150 KB per foto setelah dikompresi.
-Untuk cicilan yang berjalan belasan tahun (ratusan pembayaran), perkiraannya
-**di bawah 40 MB**.
+Rows marked `LUNAS` with a future transfer date are flagged `pra-catat` in the
+history, and proof can be attached later.
 
-### Bagaimana bukti transfer diperkecil
-
-Foto dikompresi **dua kali**, dan yang pertama terjadi di HP:
-
-1. **Di peramban, sebelum dikirim.** Foto diperkecil ke maksimal 1600px dan
-   di-encode ulang sebagai JPEG. Foto 12 MP (4 MB) menjadi ~230 KB dalam ~0,2
-   detik. Ini penghematan terbesar untuk VPS kecil: kuota unggah hemat, dan
-   server tidak pernah menerima berkas besar. Bila peramban tidak bisa membaca
-   formatnya (mis. HEIC di sebagian Android), berkas asli dikirim apa adanya.
-2. **Di server, dengan sharp.** Hasilnya dikonversi ke WebP maksimal 2000px
-   (kualitas 82) plus thumbnail 400px, dan metadata EXIF termasuk koordinat
-   GPS dibuang. Server selalu mengompresi ulang — kompresi di klien adalah
-   optimasi, bukan pengaman, dan berkas dari klien tidak pernah dipercaya.
-
-Hasil akhir tersimpan: **~150 KB** per bukti, dari foto asli 4 MB.
-
-Beberapa penyetelan lain untuk mesin kecil:
-
-- `sharp.concurrency(1)` dan cache dibatasi 32 MB. Bawaannya libvips membuka
-  thread sebanyak jumlah core dan cache puluhan MB — pemakaian yang tidak
-  pernah terpakai pada aplikasi dua pengguna, dan lonjakannya yang membuat
-  proses kena OOM di VPS 512 MB.
-- Thumbnail dibuat dari hasil yang sudah dikecilkan, bukan dari berkas asli.
-  Membongkar ulang JPEG 12 MP untuk kedua kalinya adalah bagian termahal di
-  seluruh jalur ini, sementara hasilnya sama saja: gambar 400px.
-- `limitInputPixels` 50 MP menahan "decompression bomb" — berkas 200 KB yang
-  membongkar jadi puluhan ribu piksel persegi dan menghabiskan seluruh RAM.
+Nothing is ever silently deleted. Removing a transaction soft-deletes it, and
+every create, edit, and delete is written to an audit trail both users can read.
 
 ---
 
-## Menjalankan di VPS
+## Deploy
 
-Prasyarat: Docker + Docker Compose, dan **A record domain sudah mengarah ke IP
-VPS**. Caddy menerbitkan sertifikat lewat verifikasi HTTP-01, jadi kalau DNS
-belum propagasi saat container pertama kali start, penerbitannya gagal.
+Requirements: Docker with Compose, a domain, a server with 1 GB RAM.
 
 ```bash
-git clone <repo> bayar-rumah && cd bayar-rumah
+git clone https://github.com/baktistr/bayar-rumah.git && cd bayar-rumah
 
 cp .env.example .env
-# Isi AUTH_SECRET dan DOMAIN. Buat secret dengan:
-openssl rand -base64 32
+openssl rand -base64 32        # put this in AUTH_SECRET
 
 mkdir -p data
 docker compose --profile proxy up -d --build
 ```
 
-Buka `https://<DOMAIN>`. Login dengan kredensial dari `.env`; keduanya wajib
-ganti password pada login pertama sebelum bisa masuk ke aplikasi.
+Point the domain's A record at the server **before** the first start — Caddy
+issues its certificate over HTTP-01 and fails if DNS hasn't propagated yet.
 
-Kalau `BASELINE_AMOUNT` dan `SEED_LEDGER` dikosongkan, aplikasi mulai dengan
-ledger kosong — saldo awal dan cicilan diisi lewat menu Pengaturan dan tombol
-tambah. Cara ini yang paling aman kalau kamu tidak mau angka keuangan pernah
-melewati environment variable sama sekali.
+Open `https://<DOMAIN>` and log in. Both accounts must change their password
+before they can go any further.
 
-Kalau `ADMIN_PASSWORD`/`VIEWER_PASSWORD` dikosongkan, password acak dibuat dan
-dicetak **satu kali** ke log:
+If `ADMIN_PASSWORD` / `VIEWER_PASSWORD` are left blank, random ones are printed
+**once** to the log:
 
 ```bash
 docker compose logs app | head -30
 ```
 
-### Kalau uid host bukan 1000
+**Without a domain**, drop `--profile proxy` and the app is served on
+`127.0.0.1:3000`. Over plain HTTP the session cookie needs `COOKIE_SECURE=false`
+in `.env` — never set that on an exposed server.
 
-Container menulis ke `./data` sebagai uid 1000. Cek uid Anda dengan `id -u`;
-kalau berbeda, tambahkan ke `.env`:
-
-```
-PUID=1001
-PGID=1001
-```
-
-### Tanpa domain (uji coba lokal)
-
-```bash
-docker compose up -d --build        # tanpa --profile proxy
-```
-
-Aplikasi tersedia di `http://127.0.0.1:3000`. Untuk HTTP polos, sesi butuh
-`COOKIE_SECURE=false` di `.env` — jangan dipakai di server yang terekspos.
+**If your host UID isn't 1000**, set `PUID` / `PGID` in `.env` to match
+(`id -u && id -g`). The container writes to `./data` as UID 1000.
 
 ---
 
-## Pengembangan lokal
+## Configuration
 
-```bash
-npm install
-cp .env.example .env.local        # isi AUTH_SECRET
-npm run db:migrate                # migrasi + seed data awal
-npm run dev
-```
-
-| Perintah | Fungsi |
+| Variable | Notes |
 |---|---|
-| `npm run dev` | Dev server |
-| `npm run build` | Build produksi + bundel skrip bootstrap |
-| `npm run db:migrate` | Jalankan migrasi lalu seed (idempoten) |
-| `npm run db:generate` | Buat berkas migrasi baru setelah mengubah skema |
-| `npm run check` | Cetak ringkasan ledger + uji konsistensi angka |
-| `npm run e2e` | Uji end-to-end Playwright terhadap image Docker |
-| `npx tsc --noEmit` | Typecheck |
-| `npx eslint src` | Lint |
+| `AUTH_SECRET` | **Required**, 32+ chars. Changing it logs everyone out |
+| `DOMAIN` | Used by Caddy for automatic HTTPS |
+| `ADMIN_*` / `VIEWER_*` | Name, username, password for the two accounts |
+| `BASELINE_AMOUNT`, `BASELINE_DATE` | Opening balance and its date |
+| `ORIGINAL_AMOUNT` | Denominator for the progress percentage |
+| `MONTHLY_TARGET`, `DUE_DAY_OF_MONTH` | Projection and form defaults |
+| `SEED_LEDGER` | Existing payment history, one-line JSON |
+| `HOUSE_LABEL` | Title shown in the header |
 
-`npm run check` berguna setelah restore backup atau kapan pun angka di layar
-terasa meragukan — ia membandingkan jumlah transaksi dengan total terbayar dan
-jumlah jadwal proyeksi dengan sisa hutang.
+Passwords must be 12+ characters and are checked against a blocklist of common
+words. A value that fails is replaced with a random one and the reason logged.
+
+The financial variables are read **only** while the database is empty; after
+that everything is managed in the app. Leave them blank to start with an empty
+ledger and enter the numbers through the UI instead — the safest option if you
+would rather they never pass through an environment variable at all.
+
+A malformed `SEED_LEDGER` aborts startup rather than writing bad numbers into
+the ledger.
 
 ---
 
-## Cadangan
+## Backups
 
-Semua state ada di satu folder: `./data` (`app.db` + `uploads/`).
+All state lives in one folder: `./data` (`app.db` + `uploads/`).
 
 ```bash
 ./scripts/backup.sh
 ```
 
-Membuat snapshot konsisten via `VACUUM INTO` — bukan menyalin `app.db` mentah,
-yang bisa kehilangan transaksi terbaru karena SQLite berjalan dalam mode WAL —
-plus arsip bukti transfer. Hasilnya di `data/backups/`, disimpan 30 hari.
+Uses `VACUUM INTO` for a consistent snapshot — copying `app.db` directly can
+lose recent writes, because SQLite runs in WAL mode — plus a tar of the proof
+images. Output goes to `data/backups/`, kept 30 days.
 
-Untuk cadangan harian otomatis, pasang di cron host:
+Nightly, via the host's crontab:
 
 ```
 0 2 * * * cd /srv/bayar-rumah && ./scripts/backup.sh >> data/backup.log 2>&1
 ```
 
-Admin juga bisa mengunduh cadangan sewaktu-waktu lewat **Akun → Pengaturan**.
+The admin can also download a backup any time from **Akun → Pengaturan**.
 
-### Memulihkan
+Restore:
 
 ```bash
 docker compose down
 cp data/backups/app-YYYYMMDD-HHMMSS.db data/app.db
 tar -xzf data/backups/uploads-YYYYMMDD-HHMMSS.tar.gz -C data
 docker compose --profile proxy up -d
-npm run check     # pastikan angkanya utuh
+npm run check     # confirms the numbers still add up
 ```
+
+**Backups are not encrypted.** They hold the full ledger and password hashes —
+encrypt them before copying anywhere else.
 
 ---
 
-## Keamanan
+## Development
 
-Sesi dan akun:
+```bash
+npm install
+cp .env.example .env.local     # set AUTH_SECRET
+npm run db:migrate             # migrate + seed
+npm run dev
+```
 
-- Password disimpan dengan **scrypt** (`node:crypto`), tanpa dependency eksternal.
-- Aturan password mengikuti pendekatan NIST SP 800-63B: **minimal 12 karakter**
-  plus daftar kata terlarang, bukan aturan komposisi (wajib simbol/angka/huruf
-  besar). Aturan komposisi mendorong orang membuat `Password1!` — lolos syarat
-  di atas kertas, tapi justru pola pertama yang ditebak mesin. Kata umum
-  Indonesia (`ganteng`, `sayang`, `rahasia`, …), username sendiri, karakter
-  berulang, dan urutan angka semuanya ditolak. Aturan yang sama berlaku untuk
-  `ADMIN_PASSWORD`/`VIEWER_PASSWORD` di `.env`; nilai yang tidak lolos diganti
-  password acak dan alasannya dicetak ke log container.
-- Sesi berupa JWT di cookie `httpOnly`. Setiap request mencocokkan
-  `session_version` di token dengan yang tercatat di database, sehingga
-  **mengganti password langsung mencabut sesi di perangkat lain** — termasuk
-  token yang sudah dicuri. Tanpa itu, JWT tetap sah sampai kedaluwarsa dan
-  ganti password tidak mengusir siapa pun.
-- Login dibatasi pada dua sumbu: **5 percobaan per IP** dan **10 per username**
-  tiap 15 menit. Sumbu username yang menentukan — header `X-Forwarded-For` bisa
-  dipalsukan, username yang sedang dibobol tidak bisa.
-- Peran diperiksa di server pada setiap Server Action. Menyembunyikan tombol di
-  UI tidak dianggap sebagai pengamanan.
-- Tujuan redirect setelah login dibatasi daftar karakter yang diizinkan, bukan
-  penolakan pola satu per satu.
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` | Production build + migration bootstrap bundle |
+| `npm run db:migrate` | Run migrations, then seed (idempotent) |
+| `npm run db:generate` | New migration file after a schema change |
+| `npm run check` | Ledger summary + consistency check |
+| `npm run e2e` | End-to-end tests against the Docker image |
 
-Berkas dan data:
-
-- Bukti transfer **tidak** disimpan di folder publik. Aksesnya lewat
-  `/api/bukti/[id]` yang memeriksa sesi lebih dulu, dan menjawab 404 (bukan 403)
-  bila tidak berhak, supaya keberadaan berkas pun tidak bocor.
-- Unggahan divalidasi lewat magic bytes, bukan ekstensi atau `Content-Type` yang
-  keduanya dikirim klien. Nama berkas diganti UUID buatan server, dan metadata
-  EXIF termasuk koordinat GPS dibuang oleh sharp.
-- PDF disajikan sebagai unduhan, bukan inline: penampil PDF bawaan browser
-  menjalankan JavaScript, dan menampilkannya inline sama dengan menjalankan
-  berkas unggahan pada origin aplikasi.
-
-Transport dan header:
-
-- HSTS diaktifkan di Caddy (tidak otomatis) dan cookie sesi bertanda `Secure`.
-- Caddy **menimpa** `X-Forwarded-For` dengan IP peer sungguhan, bukan menambah
-  ke rantai kiriman klien.
-- CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`,
-  `noindex`. Header `X-Powered-By` dimatikan.
-- Tidak ada analytics atau telemetri pihak ketiga.
-
-Regresi keamanan ini dikunci oleh `e2e/security.spec.ts` — jangan hapus kasusnya
-tanpa alasan kuat; semuanya pernah gagal sungguhan.
-
-### Yang tetap jadi tanggung jawab operasional
-
-Aplikasinya tidak bisa menutup hal-hal ini untukmu:
-
-1. **Cadangan tidak terenkripsi.** `data/backups/*.db` berisi seluruh ledger dan
-   hash password. Kalau disalin ke penyimpanan awan, enkripsi dulu
-   (`age` atau `gpg -c`).
-2. **Kredensial awal tercetak di log container** bila dibuat acak. Setelah
-   keduanya ganti password, bersihkan: `docker compose logs --no-log-prefix > /dev/null`
-   atau putar ulang container dengan `docker compose up -d --force-recreate`.
-3. **Amankan VPS-nya sendiri.** Aplikasi ini aman sejauh mesinnya aman: SSH
-   dengan kunci saja (matikan login password), firewall hanya membuka 22/80/443,
-   dan `unattended-upgrades` menyala.
-4. **`AUTH_SECRET` jangan pernah masuk git.** Sudah ada di `.gitignore`;
-   menggantinya akan mengeluarkan semua yang sedang login.
-5. **Rate limit disimpan di memori proses**, jadi hitungannya reset tiap
-   container restart. Cukup untuk satu instance; kalau nanti ada beberapa
-   replika, ini harus pindah ke penyimpanan bersama.
+`npm run check` is worth running after restoring a backup, or any time the
+numbers on screen look wrong — it cross-checks transaction totals against the
+running balance, and the projection schedule against the remaining debt.
 
 ---
 
-## Struktur
+## Security
 
-```
-src/
-├─ app/
-│  ├─ (app)/          Halaman di balik login: beranda, riwayat, input, proyeksi, akun
-│  ├─ actions/        Server Actions — semua penulisan data lewat sini
-│  ├─ api/            health, bukti (terproteksi), export CSV, backup
-│  └─ login/
-├─ components/        UI, termasuk charts/ dan komponen shadcn di ui/
-├─ db/                Skema Drizzle, klien SQLite, migrasi, seed
-├─ lib/               ledger (perhitungan saldo), projection (proyeksi lunas),
-│                     money, period, auth, session, password, uploads, audit
-└─ proxy.ts           Gerbang sesi tingkat request
-e2e/                  Uji Playwright
-drizzle/              Berkas migrasi SQL
-```
+- Sessions are JWTs in `httpOnly` cookies carrying a `session_version` that is
+  re-checked on every request, so changing a password immediately revokes
+  sessions on other devices — including a stolen one.
+- Login is rate-limited per IP **and** per username. The username axis is the
+  one that counts: `X-Forwarded-For` can be forged, the account under attack
+  cannot.
+- Passwords use scrypt from `node:crypto`. The policy follows NIST SP 800-63B —
+  length plus a blocklist, not composition rules.
+- Proof images are never served from a public folder. `/api/bukti/[id]` checks
+  the session first and answers 404 when it shouldn't be seen.
+- Uploads are validated by magic bytes, not extension or `Content-Type`.
+  Filenames are server-generated UUIDs and EXIF — including GPS — is stripped.
+  PDFs are forced to download, because browser PDF viewers execute JavaScript.
+- Roles are enforced server-side in every Server Action, not by hiding buttons.
+- CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, `noindex`.
+- No third-party analytics or telemetry.
 
-Perhitungan inti terpisah dari database dan React: `lib/projection.ts` adalah
-fungsi murni, sehingga simulator di halaman Proyeksi memakai kode yang sama
-persis dengan proyeksi di server, tanpa duplikasi rumus.
+`e2e/security.spec.ts` locks these down. Every case in there failed for real at
+some point — don't delete them casually.
+
+Still your responsibility: encrypt backups, clear seeded credentials out of
+container logs, use key-only SSH, keep the firewall tight.
+
+---
+
+## Resource usage
+
+Measured against the production image, not estimated:
+
+| | |
+|---|---|
+| Docker image | 297 MB |
+| RAM idle / typical / peak | ~55 MB / ~120 MB / ~131 MB |
+| CPU | ~0% idle, brief spike while processing a photo |
+| Disk | a few hundred KB for the database, ~150 KB per proof image |
+
+Proof images are compressed twice: resized to 1600px in the browser before
+upload (a 4 MB phone photo becomes ~230 KB), then re-encoded server-side to
+WebP with a thumbnail. The server always re-compresses — client-side
+compression is an optimisation, never a trust boundary.
+
+1 GB RAM is comfortable. Across a loan running into the hundreds of payments,
+total disk stays under 40 MB.
