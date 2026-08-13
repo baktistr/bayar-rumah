@@ -109,7 +109,7 @@ export async function changePasswordAction(
   if (!(await verifyPassword(current, row.passwordHash))) {
     return { error: "Password saat ini salah." };
   }
-  const invalid = validatePassword(next);
+  const invalid = validatePassword(next, { username: row.username });
   if (invalid) return { error: invalid };
   if (next !== confirm) return { error: "Konfirmasi password tidak cocok." };
   if (next === current) return { error: "Password baru harus berbeda." };

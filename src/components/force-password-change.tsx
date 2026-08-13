@@ -66,10 +66,15 @@ export function ForcePasswordChange({ name }: { name: string }) {
                   type="password"
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={12}
                   className="tap h-12 text-base"
                 />
-                <p className="text-xs text-muted-foreground">Minimal 8 karakter.</p>
+                <p className="text-xs text-muted-foreground">
+                  Minimal 12 karakter. Gabungan beberapa kata seperti
+                  <span className="font-medium"> melati-kembang-2026</span> jauh
+                  lebih kuat sekaligus lebih mudah diingat daripada satu kata
+                  pendek dengan angka di belakangnya.
+                </p>
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="confirm">Ulangi password baru</Label>
@@ -79,7 +84,7 @@ export function ForcePasswordChange({ name }: { name: string }) {
                   type="password"
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={12}
                   className="tap h-12 text-base"
                 />
               </div>

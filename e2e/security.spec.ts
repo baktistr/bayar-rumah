@@ -10,9 +10,9 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
  * akun admin dan membuat uji-uji sesudahnya gagal karena alasan yang salah.
  */
 
-const ADMIN = { username: "admin", password: "rahasia12345" };
-const VIEWER = { username: "ibu", password: "ibu12345678" };
-const PASSWORD_BARU = "gantiRahasia456";
+const ADMIN = { username: "admin", password: "kemuning-batu-3391" };
+const VIEWER = { username: "ibu", password: "serambi-hujan-8172" };
+const PASSWORD_BARU = "belimbing-tua-4408";
 
 test.describe.configure({ mode: "serial" });
 

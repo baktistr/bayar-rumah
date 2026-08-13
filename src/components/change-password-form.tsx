@@ -58,9 +58,12 @@ export function ChangePasswordForm() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={12}
               className="tap h-11"
             />
+            <p className="text-xs text-muted-foreground">
+              Minimal 12 karakter, hindari kata umum.
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="acc-confirm">Ulangi password baru</Label>
@@ -70,7 +73,7 @@ export function ChangePasswordForm() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={12}
               className="tap h-11"
             />
           </div>

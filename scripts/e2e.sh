@@ -30,8 +30,8 @@ run_spec() {
     -p "127.0.0.1:${PORT}:3000" \
     -e AUTH_SECRET="$(openssl rand -base64 32)" \
     -e COOKIE_SECURE=false \
-    -e ADMIN_NAME=Bakti -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=rahasia12345 \
-    -e VIEWER_NAME=Ibu -e VIEWER_USERNAME=ibu -e VIEWER_PASSWORD=ibu12345678 \
+    -e ADMIN_NAME=Bakti -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=kemuning-batu-3391 \
+    -e VIEWER_NAME=Ibu -e VIEWER_USERNAME=ibu -e VIEWER_PASSWORD=serambi-hujan-8172 \
     -v "${DATA_DIR}:/app/data" \
     bayar-rumah:e2e >/dev/null
   for _ in $(seq 1 60); do

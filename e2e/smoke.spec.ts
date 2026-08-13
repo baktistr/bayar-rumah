@@ -9,8 +9,8 @@ import os from "node:os";
  * container produksi, bukan dev server.
  */
 
-const ADMIN = { username: "admin", password: "rahasia12345", newPassword: "adminBaru123" };
-const VIEWER = { username: "ibu", password: "ibu12345678", newPassword: "ibuBaru12345" };
+const ADMIN = { username: "admin", password: "kemuning-batu-3391", newPassword: "lentera-pagi-5520" };
+const VIEWER = { username: "ibu", password: "serambi-hujan-8172", newPassword: "kopi-sore-7734" };
 
 async function submitLogin(page: Page, username: string, password: string) {
   await page.goto("/login");

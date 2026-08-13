@@ -142,6 +142,14 @@ npm run check     # pastikan angkanya utuh
 Sesi dan akun:
 
 - Password disimpan dengan **scrypt** (`node:crypto`), tanpa dependency eksternal.
+- Aturan password mengikuti pendekatan NIST SP 800-63B: **minimal 12 karakter**
+  plus daftar kata terlarang, bukan aturan komposisi (wajib simbol/angka/huruf
+  besar). Aturan komposisi mendorong orang membuat `Password1!` — lolos syarat
+  di atas kertas, tapi justru pola pertama yang ditebak mesin. Kata umum
+  Indonesia (`ganteng`, `sayang`, `rahasia`, …), username sendiri, karakter
+  berulang, dan urutan angka semuanya ditolak. Aturan yang sama berlaku untuk
+  `ADMIN_PASSWORD`/`VIEWER_PASSWORD` di `.env`; nilai yang tidak lolos diganti
+  password acak dan alasannya dicetak ke log container.
 - Sesi berupa JWT di cookie `httpOnly`. Setiap request mencocokkan
   `session_version` di token dengan yang tercatat di database, sehingga
   **mengganti password langsung mencabut sesi di perangkat lain** — termasuk

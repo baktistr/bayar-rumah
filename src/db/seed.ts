@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "./index";
 import { settings, transactions, users } from "./schema";
-import { hashPassword } from "../lib/password";
+import { hashPassword, validatePassword } from "../lib/password";
 import { clampDayToMonth } from "../lib/period";
 
 /**
@@ -50,10 +50,27 @@ const SEED_LEDGER = [
   })),
 ];
 
-function envOrRandom(key: string): { value: string; generated: boolean } {
+/**
+ * Password dari environment harus lolos aturan yang sama dengan yang berlaku
+ * di aplikasi. Kalau tidak, password lemah bisa menyelinap lewat pintu belakang
+ * seed — persis jalur yang tidak diawasi siapa pun.
+ */
+function envOrRandom(key: string): {
+  value: string;
+  generated: boolean;
+  reason?: string;
+} {
   const fromEnv = process.env[key];
-  if (fromEnv && fromEnv.length >= 8) return { value: fromEnv, generated: false };
-  return { value: randomBytes(9).toString("base64url"), generated: true };
+  if (fromEnv) {
+    const invalid = validatePassword(fromEnv);
+    if (!invalid) return { value: fromEnv, generated: false };
+    return {
+      value: randomBytes(12).toString("base64url"),
+      generated: true,
+      reason: `${key} ditolak: ${invalid}`,
+    };
+  }
+  return { value: randomBytes(12).toString("base64url"), generated: true };
 }
 
 export async function seed() {
@@ -103,6 +120,9 @@ export async function seed() {
       },
     ]);
 
+    for (const pw of [adminPw, viewerPw]) {
+      if (pw.reason) notes.push(pw.reason);
+    }
     credentials.push(
       { label: "ADMIN ", username: adminUsername, password: adminPw.value },
       { label: "VIEWER", username: viewerUsername, password: viewerPw.value },
