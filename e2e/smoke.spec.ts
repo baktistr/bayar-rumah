@@ -27,6 +27,9 @@ async function fotoUji(namaFile: string, lebar: number, tinggi: number) {
  * Uji alur nyata lewat browser: login kedua peran, catat pembayaran beserta
  * bukti transfer, dan pastikan saldo ikut berubah. Dijalankan terhadap
  * container produksi, bukan dev server.
+ *
+ * Semua nominal di sini berasal dari fixture di scripts/e2e.sh — angka bulat
+ * rekaan, bukan data keuangan sungguhan.
  */
 
 const ADMIN = { username: "admin", password: "kemuning-batu-3391", newPassword: "lentera-pagi-5520" };
@@ -86,14 +89,14 @@ test("admin: login pertama, ganti password, lihat saldo awal", async ({ page }) 
   await passFirstLogin(page, ADMIN.password, ADMIN.newPassword);
 
   await expect(page.getByText("Sisa hutang")).toBeVisible();
-  await expect(page.getByText("Rp 1.108.550.000").first()).toBeVisible();
-  await expect(page.getByText("3,4%")).toBeVisible();
-  await expect(page.getByText(/Lunas Juni 2045|Juni 2045/)).toBeVisible();
+  await expect(page.getByText("Rp 970.000.000").first()).toBeVisible();
+  await expect(page.getByText("3,0%")).toBeVisible();
+  await expect(page.getByText(/November 2042/)).toBeVisible();
 });
 
 test("admin: catat pembayaran dengan bukti, saldo berkurang", async ({ page }) => {
   await login(page, ADMIN.username, ADMIN.newPassword);
-  await expect(page.getByText("Rp 1.108.550.000").first()).toBeVisible();
+  await expect(page.getByText("Rp 970.000.000").first()).toBeVisible();
 
   await page.goto("/input");
   await page.getByRole("button", { name: "10 jt" }).click();
@@ -109,9 +112,9 @@ test("admin: catat pembayaran dengan bukti, saldo berkurang", async ({ page }) =
   await expect(page.getByText("Rp 10.000.000").first()).toBeVisible();
   await expect(page.getByRole("img", { name: /bukti-3mb/i })).toBeVisible();
 
-  // 1.108.550.000 - 10.000.000
+  // 970.000.000 - 10.000.000
   await page.goto("/");
-  await expect(page.getByText("Rp 1.098.550.000").first()).toBeVisible();
+  await expect(page.getByText("Rp 960.000.000").first()).toBeVisible();
 });
 
 test("admin: buat jadwal rencana tidak mengurangi saldo riil", async ({ page }) => {
@@ -125,7 +128,7 @@ test("admin: buat jadwal rencana tidak mengurangi saldo riil", async ({ page }) 
 
   await page.goto("/");
   // Saldo riil tidak berubah; yang muncul adalah baris proyeksi terpisah.
-  await expect(page.getByText("Rp 1.098.550.000").first()).toBeVisible();
+  await expect(page.getByText("Rp 960.000.000").first()).toBeVisible();
   await expect(page.getByText("Sisa bila semua rencana terbayar")).toBeVisible();
 });
 
@@ -133,7 +136,7 @@ test("viewer: hanya bisa melihat, tidak bisa menulis", async ({ page }) => {
   await login(page, VIEWER.username, VIEWER.password);
   await passFirstLogin(page, VIEWER.password, VIEWER.newPassword);
 
-  await expect(page.getByText("Rp 1.098.550.000").first()).toBeVisible();
+  await expect(page.getByText("Rp 960.000.000").first()).toBeVisible();
   await expect(page.getByText("hanya lihat")).toBeVisible();
 
   // Tombol tambah tidak ada di navigasi.
@@ -154,7 +157,7 @@ test("viewer: hanya bisa melihat, tidak bisa menulis", async ({ page }) => {
 test("viewer: bisa membuka bukti transfer dan riwayat", async ({ page }) => {
   await login(page, VIEWER.username, VIEWER.newPassword);
   await page.goto("/riwayat");
-  await expect(page.getByText("Cicilan 11")).toBeVisible();
+  await expect(page.getByText("Cicilan 12")).toBeVisible();
   await expect(page.getByText("pra-catat").first()).toBeVisible();
 
   const csv = await page.request.get("/api/export");

@@ -49,3 +49,7 @@ next-env.d.ts
 /test-results
 /playwright-report
 /blob-report
+
+# Dokumen perencanaan — lokal saja, tidak untuk repo publik
+/PLAN.md
+/DEPLOY.md

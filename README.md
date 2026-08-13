@@ -1,29 +1,31 @@
 # BayarRumah
 
-Aplikasi monitoring pembayaran rumah ke mertua. Mobile-first, self-hosted di
-Docker, dua pengguna: **admin** (mencatat) dan **viewer** (melihat).
+Aplikasi monitoring cicilan rumah untuk pinjaman keluarga — tanpa bunga, jangka
+panjang, dicatat berdua. Mobile-first, self-hosted di Docker, dua pengguna:
+**admin** (mencatat) dan **viewer** (melihat).
 
-Rancangan lengkap dan alasan di balik keputusannya ada di [PLAN.md](PLAN.md).
+> Repositori ini tidak memuat data keuangan apa pun. Seluruh angka — saldo,
+> riwayat cicilan, target bulanan — datang dari environment variable saat
+> database pertama kali dibuat, lalu dikelola lewat aplikasi. Lihat
+> [`.env.example`](.env.example).
 
 ---
 
 ## Konsep yang perlu dipahami dulu
 
 **Setiap transaksi punya status `LUNAS` atau `RENCANA`.** Ini inti aplikasinya.
-Catatan manual sebelumnya mencampur "sudah ditransfer" dengan "dijadwalkan",
-sehingga angka Rp 1.108.550.000 yang tertulis sebagai posisi 13 Agustus 2026
-sebenarnya adalah proyeksi setelah cicilan Desember 2026.
 
-Di aplikasi:
+Catatan manual gampang mencampur "sudah ditransfer" dengan "sudah dijadwalkan",
+dan begitu tercampur, satu angka saldo bisa berarti dua hal berbeda tergantung
+siapa yang membacanya. Di aplikasi keduanya tidak pernah bercampur:
 
 - **Sisa hutang** hanya menghitung baris `LUNAS`.
 - **Sisa bila semua rencana terbayar** menghitung `RENCANA` juga, ditampilkan
-  terpisah dan tidak pernah dicampur.
+  terpisah.
 
-Seed awal memuat cicilan 9–15 sebagai `LUNAS` sesuai catatan asli, jadi saldo
-awal aplikasi = **Rp 1.108.550.000**. Baris yang tanggal transfernya masih di
-depan diberi tanda `pra-catat` di Riwayat, dan bukti transfernya bisa dilampirkan
-menyusul.
+Baris berstatus `LUNAS` yang tanggal transfernya masih di depan — misalnya
+cicilan yang sudah dicatat di muka — ditandai `pra-catat` di Riwayat, dan bukti
+transfernya bisa dilampirkan menyusul.
 
 **Semua perubahan tercatat.** Menghapus transaksi tidak benar-benar menghapus
 barisnya (soft delete), dan setiap pembuatan/perubahan masuk ke jejak audit yang
@@ -49,7 +51,8 @@ Diukur pada image produksi, bukan perkiraan:
 
 Disk: database berukuran beberapa ratus KB bahkan setelah ratusan transaksi.
 Yang tumbuh adalah bukti transfer — sekitar 150 KB per foto setelah dikompresi.
-Untuk seluruh masa cicilan (±222 pembayaran), perkiraannya **di bawah 40 MB**.
+Untuk cicilan yang berjalan belasan tahun (ratusan pembayaran), perkiraannya
+**di bawah 40 MB**.
 
 ### Bagaimana bukti transfer diperkecil
 
@@ -100,6 +103,11 @@ docker compose --profile proxy up -d --build
 
 Buka `https://<DOMAIN>`. Login dengan kredensial dari `.env`; keduanya wajib
 ganti password pada login pertama sebelum bisa masuk ke aplikasi.
+
+Kalau `BASELINE_AMOUNT` dan `SEED_LEDGER` dikosongkan, aplikasi mulai dengan
+ledger kosong — saldo awal dan cicilan diisi lewat menu Pengaturan dan tombol
+tambah. Cara ini yang paling aman kalau kamu tidak mau angka keuangan pernah
+melewati environment variable sama sekali.
 
 Kalau `ADMIN_PASSWORD`/`VIEWER_PASSWORD` dikosongkan, password acak dibuat dan
 dicetak **satu kali** ke log:

@@ -23,7 +23,7 @@ export function formatPercent(value: number, digits = 1): string {
 
 /**
  * Versi ringkas untuk sumbu grafik dan layar sempit.
- * 1_108_550_000 -> "1,11 M" | 39_000_000 -> "39 jt" | 500_000 -> "500 rb"
+ * 1_250_000_000 -> "1,25 M" | 39_000_000 -> "39 jt" | 500_000 -> "500 rb"
  */
 export function formatCompactIDR(amount: number): string {
   const abs = Math.abs(amount);
@@ -57,7 +57,7 @@ export function formatIDRInput(input: string): string {
   return value === 0 && input.replace(/\D/g, "") === "" ? "" : formatNumber(value);
 }
 
-/** "1.108.550.000" -> "satu miliar seratus delapan juta ..." — dipakai di layar konfirmasi. */
+/** 1_250_000_000 -> "1,25 miliar" — dipakai di layar konfirmasi. */
 export function terbilangSingkat(amount: number): string {
   const abs = Math.abs(amount);
   if (abs >= 1_000_000_000) {

@@ -1,54 +1,68 @@
 import { randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { db } from "./index";
 import { settings, transactions, users } from "./schema";
 import { hashPassword, validatePassword } from "../lib/password";
-import { clampDayToMonth } from "../lib/period";
+import { clampDayToMonth, currentPeriod } from "../lib/period";
 
 /**
  * Seed idempoten: aman dijalankan tiap container start. Tidak pernah menimpa
  * data yang sudah ada — hanya mengisi tabel yang masih kosong.
+ *
+ * SELURUH angka datang dari environment, tanpa kecuali. Repositori ini tidak
+ * memuat satu pun nilai keuangan sungguhan: saldo, riwayat cicilan, dan target
+ * bulanan adalah data pribadi pemiliknya, dan kode sumber bukan tempatnya.
+ * Nilai bawaannya nol/kosong, sehingga instalasi tanpa konfigurasi apa pun
+ * tetap berjalan — hanya dengan ledger kosong yang siap diisi lewat aplikasi.
  */
 
-const BASELINE_AMOUNT = 1_147_550_000;
-const BASELINE_DATE = "2026-05-01";
-const BASELINE_INSTALLMENT_NO = 8;
-const MONTHLY_TARGET = 5_000_000;
-const DUE_DAY = 5;
+const DEFAULT_DUE_DAY = 5;
+
+function envInt(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const value = Number.parseInt(raw.replace(/\D/g, ""), 10);
+  return Number.isFinite(value) ? value : fallback;
+}
 
 /**
- * Ledger awal sesuai catatan manual per 13 Agustus 2026.
- * Cicilan 12–15 (Sep–Des 2026) ikut dicatat LUNAS sesuai keputusan pemilik data,
- * dengan paid_at tersebar per bulan supaya grafik penurunan saldo tetap
- * bertahap, bukan terjun bebas di satu tanggal.
+ * Riwayat pembayaran yang sudah terjadi sebelum aplikasi ini dipakai, dikirim
+ * sebagai JSON lewat SEED_LEDGER. Divalidasi ketat: seed yang salah bentuk
+ * lebih baik gagal keras saat container start daripada diam-diam memasukkan
+ * angka ngawur ke ledger keuangan.
  */
-const SEED_LEDGER = [
-  {
-    installmentNo: null,
-    type: "LUMP_SUM" as const,
-    amount: 6_000_000,
-    period: "2026-05",
-    day: 1,
-    note: "Pengurang saldo per 1 Mei 2026 (sesuai catatan awal).",
-  },
-  {
-    installmentNo: 9,
-    type: "CICILAN" as const,
-    amount: 3_000_000,
-    period: "2026-06",
-    day: DUE_DAY,
-    note: null,
-  },
-  ...([10, 11, 12, 13, 14, 15] as const).map((no, i) => ({
-    installmentNo: no,
-    type: "CICILAN" as const,
-    amount: 5_000_000,
-    period: `2026-${String(7 + i).padStart(2, "0")}`,
-    day: DUE_DAY,
-    note: null,
-  })),
-];
+const seedLedgerSchema = z.array(
+  z.object({
+    installmentNo: z.number().int().positive().nullable().default(null),
+    type: z
+      .enum(["CICILAN", "LUMP_SUM", "POTONGAN", "PENYESUAIAN"])
+      .default("CICILAN"),
+    amount: z.number().int().positive(),
+    period: z.string().regex(/^\d{4}-\d{2}$/),
+    day: z.number().int().min(1).max(31).default(DEFAULT_DUE_DAY),
+    note: z.string().max(500).nullable().default(null),
+  }),
+);
+
+function parseSeedLedger(): z.infer<typeof seedLedgerSchema> {
+  const raw = process.env.SEED_LEDGER?.trim();
+  if (!raw) return [];
+
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error("SEED_LEDGER bukan JSON yang valid.");
+  }
+
+  const parsed = seedLedgerSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error(`SEED_LEDGER tidak valid: ${parsed.error.issues[0]?.message}`);
+  }
+  return parsed.data;
+}
 
 /**
  * Password dari environment harus lolos aturan yang sama dengan yang berlaku
@@ -76,19 +90,30 @@ function envOrRandom(key: string): {
 export async function seed() {
   const notes: string[] = [];
 
+  const baselineAmount = envInt("BASELINE_AMOUNT", 0);
+  const baselineDate = process.env.BASELINE_DATE ?? `${currentPeriod()}-01`;
+  const dueDay = envInt("DUE_DAY_OF_MONTH", DEFAULT_DUE_DAY);
+  const seedLedger = parseSeedLedger();
+
   const existingSettings = await db.query.settings.findFirst();
   if (!existingSettings) {
     await db.insert(settings).values({
       id: 1,
-      houseLabel: process.env.HOUSE_LABEL ?? "Pembayaran Rumah ke Mertua",
-      originalAmount: BASELINE_AMOUNT,
-      baselineAmount: BASELINE_AMOUNT,
-      baselineDate: BASELINE_DATE,
-      baselineInstallmentNo: BASELINE_INSTALLMENT_NO,
-      monthlyTarget: MONTHLY_TARGET,
-      dueDayOfMonth: DUE_DAY,
+      houseLabel: process.env.HOUSE_LABEL ?? "Pembayaran Rumah",
+      // Penyebut persentase progres. Kalau tidak diset, samakan dengan
+      // baseline supaya progresnya dihitung dari titik awal pencatatan.
+      originalAmount: envInt("ORIGINAL_AMOUNT", baselineAmount),
+      baselineAmount,
+      baselineDate,
+      baselineInstallmentNo: envInt("BASELINE_INSTALLMENT_NO", 0),
+      monthlyTarget: envInt("MONTHLY_TARGET", 0),
+      dueDayOfMonth: dueDay >= 1 && dueDay <= 31 ? dueDay : DEFAULT_DUE_DAY,
     });
-    notes.push("Pengaturan dasar dibuat.");
+    notes.push(
+      baselineAmount > 0
+        ? `Pengaturan dibuat (saldo awal per ${baselineDate}).`
+        : "Pengaturan dibuat dengan saldo awal nol — isi lewat menu Pengaturan.",
+    );
   }
 
   const [{ count: userCount }] = await db
@@ -134,10 +159,10 @@ export async function seed() {
     .select({ count: sql<number>`count(*)` })
     .from(transactions);
 
-  if (txCount === 0) {
+  if (txCount === 0 && seedLedger.length > 0) {
     const admin = await db.query.users.findFirst();
     await db.insert(transactions).values(
-      SEED_LEDGER.map((row) => ({
+      seedLedger.map((row) => ({
         installmentNo: row.installmentNo,
         type: row.type,
         status: "LUNAS" as const,
@@ -149,10 +174,10 @@ export async function seed() {
         createdBy: admin?.id ?? null,
       })),
     );
-    const total = SEED_LEDGER.reduce((s, r) => s + r.amount, 0);
+    const total = seedLedger.reduce((sum, r) => sum + r.amount, 0);
     notes.push(
-      `${SEED_LEDGER.length} transaksi awal dimuat (total Rp ${total.toLocaleString("id-ID")}, ` +
-        `sisa Rp ${(BASELINE_AMOUNT - total).toLocaleString("id-ID")}).`,
+      `${seedLedger.length} transaksi awal dimuat (total Rp ${total.toLocaleString("id-ID")}, ` +
+        `sisa Rp ${(baselineAmount - total).toLocaleString("id-ID")}).`,
     );
   }
 
