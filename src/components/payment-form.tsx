@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { compressFileInput } from "@/lib/compress-image";
 import { METHOD_LABELS, TYPE_LABELS, toSelectItems } from "@/lib/labels";
 import { todayISO } from "@/lib/period";
 
@@ -50,6 +51,8 @@ export function PaymentForm({
 }) {
   const [state, formAction] = useActionState(createTransactionAction, null);
   const [files, setFiles] = useState<File[]>([]);
+  const [mengompresi, setMengompresi] = useState(false);
+  const [hemat, setHemat] = useState<{ asli: number; baru: number } | null>(null);
   const [paidAt, setPaidAt] = useState(todayISO());
   const [type, setType] = useState("CICILAN");
   const formRef = useRef<HTMLFormElement>(null);
@@ -177,8 +180,14 @@ export function PaymentForm({
           <Label className="text-sm">Bukti transfer</Label>
 
           <label className="tap flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-7 text-center transition-colors active:bg-accent">
-            <CameraIcon className="size-7 text-muted-foreground" />
-            <span className="text-sm font-medium">Ambil foto / pilih berkas</span>
+            {mengompresi ? (
+              <LoaderCircleIcon className="size-7 animate-spin text-muted-foreground" />
+            ) : (
+              <CameraIcon className="size-7 text-muted-foreground" />
+            )}
+            <span className="text-sm font-medium">
+              {mengompresi ? "Mengecilkan foto…" : "Ambil foto / pilih berkas"}
+            </span>
             <span className="text-xs text-muted-foreground">
               JPG, PNG, HEIC, atau PDF · maks 10 MB
             </span>
@@ -188,7 +197,16 @@ export function PaymentForm({
               accept="image/*,application/pdf"
               multiple
               className="hidden"
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              onChange={async (e) => {
+                // Dikompresi di HP sebelum dikirim: foto 4 MB jadi ~200 KB,
+                // sehingga unggahannya cepat di kuota dan server nyaris
+                // tidak perlu bekerja. Server tetap mengompresi ulang.
+                setMengompresi(true);
+                const hasil = await compressFileInput(e.currentTarget);
+                setFiles(hasil.files);
+                setHemat({ asli: hasil.totalAsli, baru: hasil.totalBaru });
+                setMengompresi(false);
+              }}
             />
           </label>
 
@@ -211,11 +229,19 @@ export function PaymentForm({
               ))}
             </ul>
           ) : null}
+          {hemat && hemat.asli > hemat.baru ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Dikecilkan dari {(hemat.asli / 1024 / 1024).toLocaleString("id-ID", { maximumFractionDigits: 1 })} MB
+              {" "}jadi {(hemat.baru / 1024).toLocaleString("id-ID", { maximumFractionDigits: 0 })} KB sebelum dikirim.
+            </p>
+          ) : null}
+
           {files.length > 0 ? (
             <button
               type="button"
               onClick={() => {
                 setFiles([]);
+                setHemat(null);
                 const input =
                   formRef.current?.querySelector<HTMLInputElement>('input[name="bukti"]');
                 if (input) input.value = "";

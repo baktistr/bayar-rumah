@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { Attachment } from "@/db/schema";
+import { compressFileInput } from "@/lib/compress-image";
 
 export function AttachmentGallery({
   attachments,
@@ -153,7 +154,12 @@ export function AttachmentGallery({
                 accept="image/*,application/pdf"
                 multiple
                 className="hidden"
-                onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                onChange={async (e) => {
+                  // Kecilkan dulu, baru kirim — sama seperti di form input.
+                  const input = e.currentTarget;
+                  await compressFileInput(input);
+                  input.form?.requestSubmit();
+                }}
               />
             </label>
           </form>

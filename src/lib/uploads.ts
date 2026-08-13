@@ -7,7 +7,28 @@ import sharp from "sharp";
 
 import { UPLOAD_DIR } from "@/db";
 
+/**
+ * Penyetelan libvips untuk VPS kecil.
+ *
+ * Bawaannya, libvips membuka thread pool sebanyak jumlah core dan menyimpan
+ * cache operasi puluhan MB. Untuk aplikasi dua pengguna yang paling banter
+ * memproses satu foto sekali waktu, itu semua hanya memakan RAM yang tidak
+ * pernah terpakai — dan pada VPS 512 MB, lonjakannya yang membuat proses
+ * kena OOM. Satu thread justru membuat pemakaian memorinya rata dan
+ * terprediksi; kecepatannya tidak terasa berbeda untuk satu berkas.
+ */
+sharp.concurrency(1);
+sharp.cache({ memory: 32, files: 0, items: 50 });
+
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Batas jumlah piksel setelah didekode, bukan ukuran berkas. Gambar 200 KB
+ * bisa saja membongkar jadi 100.000 x 100.000 piksel dan menghabiskan seluruh
+ * RAM server — "decompression bomb". 50 MP jauh di atas kamera HP mana pun.
+ */
+const MAX_INPUT_PIXELS = 50_000_000;
+
 export const ACCEPTED_MIME = [
   "image/jpeg",
   "image/png",
@@ -92,14 +113,17 @@ export async function storeUpload(file: File): Promise<StoredFile> {
   const fileName = `${id}.webp`;
   const thumbName = `${id}_thumb.webp`;
 
-  const full = await sharp(buf, { failOn: "none" })
+  const full = await sharp(buf, { failOn: "none", limitInputPixels: MAX_INPUT_PIXELS })
     .rotate()
     .resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 82 })
     .toBuffer();
 
-  const thumb = await sharp(buf, { failOn: "none" })
-    .rotate()
+  // Thumbnail dibuat dari hasil yang sudah dikecilkan, BUKAN dari berkas asli.
+  // Membongkar ulang JPEG 12 MP untuk kedua kalinya menghabiskan waktu dan
+  // memori paling banyak di seluruh jalur ini, sementara hasil akhirnya sama:
+  // gambar 400px. Sumbernya sudah ter-rotate, jadi .rotate() tidak diulang.
+  const thumb = await sharp(full, { failOn: "none" })
     .resize({ width: 400, height: 400, fit: "cover" })
     .webp({ quality: 70 })
     .toBuffer();

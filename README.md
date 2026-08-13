@@ -40,17 +40,44 @@ Diukur pada image produksi, bukan perkiraan:
 | Image Docker | 297 MB |
 | RAM saat idle | ~55 MB |
 | RAM pemakaian normal | ~120–145 MB |
-| RAM puncak (mengompresi foto 8 MB) | ~196 MB |
-| CPU | ~0% idle, sekejap naik saat kompresi foto |
-| Waktu proses unggah foto 8 MB | ~1 detik |
+| RAM puncak (memproses foto 12 MP) | ~131 MB |
+| CPU | ~0% idle, sekejap naik saat memproses foto |
+| Unggah foto 12 MP (kompresi HP → tersimpan) | ~0,6 detik |
 
 **VPS 1 GB RAM sudah lapang** — termasuk Caddy (~15 MB) dan sistem operasinya.
 512 MB pun masih cukup, meski tanpa banyak ruang bernapas.
 
 Disk: database berukuran beberapa ratus KB bahkan setelah ratusan transaksi.
-Yang tumbuh adalah bukti transfer — sekitar 200–400 KB per foto setelah
-dikompresi ke WebP. Untuk seluruh masa cicilan (±222 pembayaran), perkiraannya
-di bawah 100 MB.
+Yang tumbuh adalah bukti transfer — sekitar 150 KB per foto setelah dikompresi.
+Untuk seluruh masa cicilan (±222 pembayaran), perkiraannya **di bawah 40 MB**.
+
+### Bagaimana bukti transfer diperkecil
+
+Foto dikompresi **dua kali**, dan yang pertama terjadi di HP:
+
+1. **Di peramban, sebelum dikirim.** Foto diperkecil ke maksimal 1600px dan
+   di-encode ulang sebagai JPEG. Foto 12 MP (4 MB) menjadi ~230 KB dalam ~0,2
+   detik. Ini penghematan terbesar untuk VPS kecil: kuota unggah hemat, dan
+   server tidak pernah menerima berkas besar. Bila peramban tidak bisa membaca
+   formatnya (mis. HEIC di sebagian Android), berkas asli dikirim apa adanya.
+2. **Di server, dengan sharp.** Hasilnya dikonversi ke WebP maksimal 2000px
+   (kualitas 82) plus thumbnail 400px, dan metadata EXIF termasuk koordinat
+   GPS dibuang. Server selalu mengompresi ulang — kompresi di klien adalah
+   optimasi, bukan pengaman, dan berkas dari klien tidak pernah dipercaya.
+
+Hasil akhir tersimpan: **~150 KB** per bukti, dari foto asli 4 MB.
+
+Beberapa penyetelan lain untuk mesin kecil:
+
+- `sharp.concurrency(1)` dan cache dibatasi 32 MB. Bawaannya libvips membuka
+  thread sebanyak jumlah core dan cache puluhan MB — pemakaian yang tidak
+  pernah terpakai pada aplikasi dua pengguna, dan lonjakannya yang membuat
+  proses kena OOM di VPS 512 MB.
+- Thumbnail dibuat dari hasil yang sudah dikecilkan, bukan dari berkas asli.
+  Membongkar ulang JPEG 12 MP untuk kedua kalinya adalah bagian termahal di
+  seluruh jalur ini, sementara hasilnya sama saja: gambar 400px.
+- `limitInputPixels` 50 MP menahan "decompression bomb" — berkas 200 KB yang
+  membongkar jadi puluhan ribu piksel persegi dan menghabiskan seluruh RAM.
 
 ---
 
