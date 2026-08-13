@@ -33,7 +33,7 @@ async function fotoUji(namaFile: string, lebar: number, tinggi: number) {
  */
 
 const ADMIN = { username: "admin", password: "kemuning-batu-3391", newPassword: "lentera-pagi-5520" };
-const VIEWER = { username: "ibu", password: "serambi-hujan-8172", newPassword: "kopi-sore-7734" };
+const VIEWER = { name: "Ibu", username: "ibu", password: "serambi-hujan-8172", newPassword: "kopi-sore-7734" };
 
 async function submitLogin(page: Page, username: string, password: string) {
   await page.goto("/login");
@@ -92,6 +92,21 @@ test("admin: login pertama, ganti password, lihat saldo awal", async ({ page }) 
   await expect(page.getByText("Rp 970.000.000").first()).toBeVisible();
   await expect(page.getByText("3,0%")).toBeVisible();
   await expect(page.getByText(/November 2042/)).toBeVisible();
+});
+
+test("admin: membuat akun viewer lewat menu Pengguna", async ({ page }) => {
+  await login(page, ADMIN.username, ADMIN.newPassword);
+  await page.goto("/pengguna");
+
+  await page.getByRole("button", { name: "Tambah pengguna" }).click();
+  await page.getByLabel("Nama").fill(VIEWER.name);
+  await page.getByLabel("Username").fill(VIEWER.username);
+  // Password acak bawaan diganti nilai tetap supaya uji berikutnya bisa login.
+  await page.getByLabel("Password sementara").fill(VIEWER.password);
+  await page.getByRole("button", { name: "Buat pengguna" }).click();
+
+  await expect(page.getByText(`@${VIEWER.username}`)).toBeVisible();
+  await expect(page.getByText("Hanya lihat").first()).toBeVisible();
 });
 
 test("admin: catat pembayaran dengan bukti, saldo berkurang", async ({ page }) => {

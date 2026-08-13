@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRightIcon, LogOutIcon, SettingsIcon } from "lucide-react";
+import { ChevronRightIcon, LogOutIcon, SettingsIcon, UsersIcon } from "lucide-react";
 
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,15 @@ export default async function AkunPage() {
 
       {isAdmin ? (
         <Card>
-          <CardContent className="px-0 py-0">
+          <CardContent className="divide-y divide-border px-0 py-0">
+            <Link
+              href="/pengguna"
+              className="tap flex items-center gap-3 px-4 py-3.5 active:bg-accent"
+            >
+              <UsersIcon className="size-5 text-muted-foreground" />
+              <span className="flex-1 text-sm font-medium">Pengguna</span>
+              <ChevronRightIcon className="size-4 text-muted-foreground" />
+            </Link>
             <Link
               href="/pengaturan"
               className="tap flex items-center gap-3 px-4 py-3.5 active:bg-accent"

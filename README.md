@@ -1,8 +1,8 @@
 # BayarRumah
 
-Installment tracker for an interest-free family house loan. Mobile-first,
-self-hosted, two users: an **admin** who records payments and a **viewer** who
-can only look.
+Installment tracker for an interest-free family house loan. Mobile-first and
+self-hosted. An **admin** records payments; **viewer** accounts can only look.
+Only the admin is seeded — any further accounts are created inside the app.
 
 > This repository contains no financial data. Every figure — opening balance,
 > payment history, monthly target — comes from environment variables when the
@@ -48,11 +48,10 @@ docker compose --profile proxy up -d --build
 Point the domain's A record at the server **before** the first start — Caddy
 issues its certificate over HTTP-01 and fails if DNS hasn't propagated yet.
 
-Open `https://<DOMAIN>` and log in. Both accounts must change their password
-before they can go any further.
+Open `https://<DOMAIN>` and log in as the admin, which must change its password
+before going any further. Add the other accounts from **Akun → Pengguna**.
 
-If `ADMIN_PASSWORD` / `VIEWER_PASSWORD` are left blank, random ones are printed
-**once** to the log:
+If `ADMIN_PASSWORD` is left blank, a random one is printed **once** to the log:
 
 ```bash
 docker compose logs app | head -30
@@ -73,7 +72,7 @@ in `.env` — never set that on an exposed server.
 |---|---|
 | `AUTH_SECRET` | **Required**, 32+ chars. Changing it logs everyone out |
 | `DOMAIN` | Used by Caddy for automatic HTTPS |
-| `ADMIN_*` / `VIEWER_*` | Name, username, password for the two accounts |
+| `ADMIN_*` | Name, username, and password of the first admin account |
 | `BASELINE_AMOUNT`, `BASELINE_DATE` | Opening balance and its date |
 | `ORIGINAL_AMOUNT` | Denominator for the progress percentage |
 | `MONTHLY_TARGET`, `DUE_DAY_OF_MONTH` | Projection and form defaults |
@@ -149,6 +148,29 @@ npm run dev
 `npm run check` is worth running after restoring a backup, or any time the
 numbers on screen look wrong — it cross-checks transaction totals against the
 running balance, and the projection schedule against the remaining debt.
+
+---
+
+## Users
+
+The admin manages accounts under **Akun → Pengguna**: create, rename, change
+role, reset a forgotten password, deactivate, reactivate.
+
+Passwords set by an admin are always temporary — the account is forced to change
+it at first login, so the admin never knows anyone else's final password.
+
+Accounts are **deactivated, not deleted**. Every transaction records who entered
+it and the audit trail records who changed what; deleting the row would break
+those references, and the ledger would lose the answer to "who put this number
+in". A deactivated account cannot log in and is signed out of every device
+immediately.
+
+Two lockouts are blocked server-side, not just hidden in the UI: you cannot
+deactivate your own account, and you cannot demote the last active admin. There
+is no recovery panel — losing the last admin means editing the database on the
+server.
+
+Changing a role or resetting a password revokes that user's sessions at once.
 
 ---
 

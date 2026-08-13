@@ -32,9 +32,12 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   const row = await db.query.users.findFirst({
     where: eq(users.id, session.id),
-    columns: { sessionVersion: true, role: true, name: true },
+    columns: { sessionVersion: true, role: true, name: true, deletedAt: true },
   });
-  if (!row || row.sessionVersion !== session.sessionVersion) return null;
+  // Akun yang dinonaktifkan diperlakukan seperti tidak ada: sesinya yang
+  // sedang berjalan langsung berhenti berlaku, tanpa menunggu token kedaluwarsa.
+  if (!row || row.deletedAt !== null) return null;
+  if (row.sessionVersion !== session.sessionVersion) return null;
 
   // Peran dan nama diambil ulang dari database, bukan dari token: kalau
   // sewaktu-waktu diubah, perubahannya berlaku tanpa menunggu login ulang.
@@ -141,6 +144,11 @@ export async function authenticate(
 
   const ok = await verifyPassword(password, row.passwordHash);
   if (!ok) return null;
+
+  // Diperiksa SETELAH password diverifikasi, bukan sebelumnya. Menolak lebih
+  // awal akan membuat waktu respons berbeda antara akun nonaktif dan password
+  // salah, dan selisih itu cukup untuk menebak username mana yang terdaftar.
+  if (row.deletedAt !== null) return null;
 
   await db
     .update(users)

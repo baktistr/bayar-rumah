@@ -29,6 +29,15 @@ export const users = sqliteTable("users", {
   sessionVersion: integer("session_version").notNull().default(0),
   createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
   lastLoginAt: integer("last_login_at"),
+  /**
+   * Akun dinonaktifkan, bukan dihapus dari database.
+   *
+   * Setiap transaksi menyimpan siapa yang mencatatnya, dan jejak audit
+   * menyimpan siapa yang mengubah apa. Menghapus baris pengguna akan memutus
+   * rujukan itu — ledger keuangan kehilangan jawaban atas "siapa yang
+   * memasukkan angka ini", yang justru inti dari mencatat berdua.
+   */
+  deletedAt: integer("deleted_at"),
 });
 
 /** Satu baris saja (id = 1). Dikelola admin lewat halaman Pengaturan. */

@@ -122,37 +122,29 @@ export async function seed() {
 
   const credentials: { label: string; username: string; password: string }[] = [];
 
+  // Hanya admin yang di-seed. Pengguna lain — termasuk akun "hanya lihat"
+  // untuk keluarga — dibuat lewat menu Pengguna setelah admin masuk, supaya
+  // penambahannya tercatat di jejak audit dan passwordnya tidak pernah
+  // singgah di environment variable.
   if (userCount === 0) {
     const adminPw = envOrRandom("ADMIN_PASSWORD");
-    const viewerPw = envOrRandom("VIEWER_PASSWORD");
     const adminUsername = (process.env.ADMIN_USERNAME ?? "admin").toLowerCase();
-    const viewerUsername = (process.env.VIEWER_USERNAME ?? "ibu").toLowerCase();
 
-    await db.insert(users).values([
-      {
-        name: process.env.ADMIN_NAME ?? "Admin",
-        username: adminUsername,
-        passwordHash: await hashPassword(adminPw.value),
-        role: "ADMIN",
-        mustChangePassword: true,
-      },
-      {
-        name: process.env.VIEWER_NAME ?? "Ibu",
-        username: viewerUsername,
-        passwordHash: await hashPassword(viewerPw.value),
-        role: "VIEWER",
-        mustChangePassword: true,
-      },
-    ]);
+    await db.insert(users).values({
+      name: process.env.ADMIN_NAME ?? "Admin",
+      username: adminUsername,
+      passwordHash: await hashPassword(adminPw.value),
+      role: "ADMIN",
+      mustChangePassword: true,
+    });
 
-    for (const pw of [adminPw, viewerPw]) {
-      if (pw.reason) notes.push(pw.reason);
-    }
-    credentials.push(
-      { label: "ADMIN ", username: adminUsername, password: adminPw.value },
-      { label: "VIEWER", username: viewerUsername, password: viewerPw.value },
-    );
-    notes.push("Dua pengguna dibuat.");
+    if (adminPw.reason) notes.push(adminPw.reason);
+    credentials.push({
+      label: "ADMIN",
+      username: adminUsername,
+      password: adminPw.value,
+    });
+    notes.push("Akun admin dibuat. Tambah pengguna lain lewat menu Pengguna.");
   }
 
   const [{ count: txCount }] = await db

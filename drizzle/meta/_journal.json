@@ -15,6 +15,13 @@
       "when": 1786587454116,
       "tag": "0001_faithful_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786595818805,
+      "tag": "0002_burly_morph",
+      "breakpoints": true
     }
   ]
 }

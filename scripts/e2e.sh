@@ -41,7 +41,6 @@ run_spec() {
     -e DUE_DAY_OF_MONTH=5 \
     -e SEED_LEDGER='[{"type":"LUMP_SUM","amount":10000000,"period":"2026-05","day":1,"note":"Saldo awal disesuaikan."},{"installmentNo":9,"amount":5000000,"period":"2026-06"},{"installmentNo":10,"amount":5000000,"period":"2026-07"},{"installmentNo":11,"amount":5000000,"period":"2026-08"},{"installmentNo":12,"amount":5000000,"period":"2026-09"}]' \
     -e ADMIN_NAME=Bakti -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=kemuning-batu-3391 \
-    -e VIEWER_NAME=Ibu -e VIEWER_USERNAME=ibu -e VIEWER_PASSWORD=serambi-hujan-8172 \
     -v "${DATA_DIR}:/app/data" \
     bayar-rumah:e2e >/dev/null
   for _ in $(seq 1 60); do

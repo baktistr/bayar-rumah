@@ -11,7 +11,6 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
  */
 
 const ADMIN = { username: "admin", password: "kemuning-batu-3391" };
-const VIEWER = { username: "ibu", password: "serambi-hujan-8172" };
 const PASSWORD_BARU = "belimbing-tua-4408";
 
 test.describe.configure({ mode: "serial" });
@@ -31,9 +30,9 @@ test("parameter ?next= tidak bisa membawa pengguna keluar situs", async ({
   // `/\example.com` lolos dari pemeriksaan startsWith("//") yang naif, dan
   // browser menormalkan backslash jadi garis miring sehingga hasilnya
   // protocol-relative — pengguna terlempar keluar tepat setelah mengetik
-  // password. Memakai akun viewer supaya jatah rate limit admin tetap utuh.
+  // password.
   await page.goto(`/login?next=${encodeURIComponent("/\\example.com")}`);
-  await isiLogin(page, VIEWER.username, VIEWER.password);
+  await isiLogin(page, ADMIN.username, ADMIN.password);
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 
   const mendarat = new URL(page.url());
@@ -43,7 +42,7 @@ test("parameter ?next= tidak bisa membawa pengguna keluar situs", async ({
 
 test("header keamanan terpasang di setiap respons", async ({ page }) => {
   await page.goto("/login");
-  await isiLogin(page, VIEWER.username, VIEWER.password);
+  await isiLogin(page, ADMIN.username, ADMIN.password);
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 
   const res = await page.request.get("/", { maxRedirects: 0 });
