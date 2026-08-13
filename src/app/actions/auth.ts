@@ -21,16 +21,34 @@ import { hashPassword, validatePassword, verifyPassword } from "@/lib/password";
 export type ActionState = { error?: string; success?: string } | null;
 
 /**
- * Kunci rate limit login.
+ * Kunci rate limit login: alamat pengunjung yang sebenarnya.
  *
- * PENTING: ambil entri TERAKHIR dari X-Forwarded-For, bukan yang pertama.
- * Caddy menambahkan IP klien ke ujung rantai yang sudah ada, jadi entri
- * pertama justru nilai yang dikirim klien dan bisa dipalsukan. Memakai
- * entri pertama membuat penyerang cukup mengganti header tiap request untuk
- * mendapat jatah percobaan baru — rate limit-nya jadi tidak berfungsi.
+ * Urutannya penting, dan tergantung siapa yang berdiri di depan aplikasi.
+ *
+ * 1. `CF-Connecting-IP` — diisi Cloudflare dengan IP asli pengunjung. Di
+ *    belakang Cloudflare, ini satu-satunya header yang benar. Rantai
+ *    X-Forwarded-For di sana berakhir pada IP edge Cloudflare, sehingga semua
+ *    pengunjung tampak berasal dari segelintir alamat yang sama — jatah "5
+ *    percobaan per IP" berubah jadi satu ember bersama, dan beberapa kali
+ *    salah ketik password bisa mengunci seisi keluarga dari luar.
+ *
+ * 2. `X-Forwarded-For`, entri TERAKHIR — bukan yang pertama. Proxy menambahkan
+ *    IP peer ke ujung rantai, jadi entri pertama justru nilai kiriman klien
+ *    yang bisa dipalsukan. Memakai entri pertama membuat penyerang cukup
+ *    mengganti header tiap request untuk selalu mendapat jatah baru.
+ *
+ * PERINGATAN: `CF-Connecting-IP` hanya layak dipercaya bila lalu lintas
+ * memang wajib lewat Cloudflare. Siapa pun yang tahu IP server bisa memukul
+ * origin langsung sambil memalsukannya — itulah sebabnya port 80/443 harus
+ * dibatasi hanya untuk rentang IP Cloudflare. Batas per-username tetap
+ * berlaku betapapun header ini diputar.
  */
 async function clientKey(): Promise<string> {
   const h = await headers();
+
+  const cloudflare = h.get("cf-connecting-ip")?.trim();
+  if (cloudflare) return cloudflare;
+
   const forwarded = h.get("x-forwarded-for");
   if (forwarded) {
     const chain = forwarded

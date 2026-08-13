@@ -7,9 +7,8 @@
 	}
 
 	header {
-		# Paksa HTTPS pada kunjungan berikutnya. Caddy tidak menambahkan ini
-		# sendiri, padahal aplikasinya menaruh cookie sesi.
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# HSTS kini ditetapkan aplikasi (next.config.ts), supaya ikut ke mana
+		# pun ia dijalankan — termasuk di balik proxy lain seperti Traefik.
 		-Server
 	}
 

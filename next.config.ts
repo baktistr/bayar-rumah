@@ -39,6 +39,17 @@ const nextConfig: NextConfig = {
           // hasil pencarian bila suatu saat domainnya terekspos.
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
           {
+            // Ditetapkan aplikasi, bukan reverse proxy. Sebelumnya ada di
+            // Caddyfile — dan begitu deployment pindah ke proxy lain, header
+            // ini hilang tanpa suara. Menempelkannya pada aplikasi membuatnya
+            // ikut ke mana pun aplikasi ini dijalankan.
+            //
+            // Tanpa preload: masuk daftar preload peramban itu komitmen yang
+            // sulit dibatalkan, dan tidak sepadan untuk aplikasi keluarga.
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains",
+          },
+          {
             // Pertahanan berlapis. 'unsafe-inline' pada script terpaksa ada
             // karena Next menyisipkan skrip inline (termasuk penentu tema);
             // menghilangkannya butuh nonce per request. Nilai selebihnya tetap

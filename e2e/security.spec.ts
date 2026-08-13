@@ -53,6 +53,10 @@ test("header keamanan terpasang di setiap respons", async ({ page }) => {
   expect(h["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(h["content-security-policy"]).toContain("object-src 'none'");
   expect(h["content-security-policy"]).toContain("base-uri 'self'");
+  // HSTS dulu disetel di Caddyfile. Begitu deployment pindah ke proxy lain,
+  // header itu hilang tanpa suara — dan memang sempat hilang di produksi.
+  // Sekarang aplikasi yang menetapkannya, dan uji ini yang menjaganya.
+  expect(h["strict-transport-security"]).toContain("max-age=31536000");
   expect(h["x-powered-by"], "versi framework tidak perlu diumumkan").toBeUndefined();
 });
 
@@ -87,6 +91,51 @@ test("ganti password mencabut sesi di perangkat lain", async ({ browser }) => {
 
   await perangkatA.close();
   await perangkatB.close();
+});
+
+test("CF-Connecting-IP dipakai sebagai alamat pengunjung, bukan X-Forwarded-For", async ({
+  browser,
+}) => {
+  // Di belakang Cloudflare, entri terakhir X-Forwarded-For adalah IP edge
+  // Cloudflare — sama untuk semua pengunjung. Kalau itu yang dipakai sebagai
+  // kunci, jatah per-IP jadi satu ember bersama dan salah ketik password
+  // beberapa kali bisa mengunci seisi keluarga.
+  //
+  // Di sini CF-Connecting-IP dibuat TETAP sementara X-Forwarded-For diganti
+  // tiap percobaan. Kalau aplikasi mendahulukan CF-Connecting-IP, batas
+  // per-IP (5) akan menahan sebelum percobaan ke-7. Kalau ia masih memakai
+  // X-Forwarded-For, tiap percobaan dianggap alamat baru dan tidak ada yang
+  // tertahan sampai batas per-username (10).
+  const pesan: string[] = [];
+  for (let i = 1; i <= 7; i += 1) {
+    const ctx = await browser.newContext({
+      extraHTTPHeaders: {
+        "CF-Connecting-IP": "198.51.100.77",
+        "X-Forwarded-For": `203.0.113.${i}, 172.16.0.${i}`,
+      },
+    });
+    const page = await ctx.newPage();
+    await page.goto("/login");
+    // Username yang tidak terdaftar, supaya jatah akun asli tidak terpakai.
+    await isiLogin(page, "bukansiapasiapa", `tebakan-${i}`);
+    pesan.push(
+      (await page
+        .locator('p[role="alert"]')
+        .textContent({ timeout: 5000 })
+        .catch(() => "")) ?? "",
+    );
+    await ctx.close();
+  }
+
+  const tertahan = pesan.findIndex((m) => /Terlalu banyak percobaan/.test(m));
+  expect(
+    tertahan,
+    "batas per-IP harus kena — berarti CF-Connecting-IP yang dipakai",
+  ).toBeGreaterThanOrEqual(0);
+  expect(
+    tertahan,
+    "kalau baru tertahan setelah 10, berarti masih memakai X-Forwarded-For",
+  ).toBeLessThan(7);
 });
 
 test("brute force satu akun tertahan walau X-Forwarded-For dipalsukan", async ({
