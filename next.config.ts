@@ -12,6 +12,20 @@ const nextConfig: NextConfig = {
   // Tidak perlu mengumumkan framework dan versinya ke pemindai otomatis.
   poweredByHeader: false,
 
+  /**
+   * Batas bawaan body Server Action adalah 1 MB, dan bukti transfer dikirim
+   * lewat Server Action. Foto kamera HP umumnya 2–5 MB, jadi dengan nilai
+   * bawaan praktis SEMUA unggahan foto asli gagal dengan 413 — fitur inti
+   * aplikasi ini. Nilainya disetel di atas batas 10 MB milik aplikasi supaya
+   * berkas yang terlalu besar ditolak oleh validasi kita (dengan pesan yang
+   * bisa dibaca) alih-alih oleh framework (dengan 413 mentah).
+   */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
+  },
+
   async headers() {
     return [
       {

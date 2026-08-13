@@ -122,8 +122,17 @@ export async function createTransactionAction(
   });
 
   refresh();
+
+  // Transaksinya SUDAH tersimpan di titik ini. Kalau hanya lampirannya yang
+  // gagal, hasilnya tetap harus dilaporkan sebagai sukses — kalau dilaporkan
+  // sebagai error, admin mengira pembayarannya tidak tercatat lalu mengisi
+  // ulang formulir, dan ledger keuangan berakhir dengan baris ganda.
+  // Buktinya bisa dilampirkan menyusul dari halaman detail.
   return uploadErrors.length > 0
-    ? { id: row.id, error: `Transaksi tersimpan, tapi bukti gagal: ${uploadErrors.join(" ")}` }
+    ? {
+        id: row.id,
+        success: `Pembayaran tersimpan, tapi bukti gagal diunggah: ${uploadErrors.join(" ")} Lampirkan lagi dari halaman ini.`,
+      }
     : { id: row.id, success: "Pembayaran tersimpan." };
 }
 

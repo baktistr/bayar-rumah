@@ -31,6 +31,29 @@ bisa dilihat kedua pengguna di halaman detail transaksi.
 
 ---
 
+## Kebutuhan sumber daya
+
+Diukur pada image produksi, bukan perkiraan:
+
+| | |
+|---|---|
+| Image Docker | 297 MB |
+| RAM saat idle | ~55 MB |
+| RAM pemakaian normal | ~120–145 MB |
+| RAM puncak (mengompresi foto 8 MB) | ~196 MB |
+| CPU | ~0% idle, sekejap naik saat kompresi foto |
+| Waktu proses unggah foto 8 MB | ~1 detik |
+
+**VPS 1 GB RAM sudah lapang** — termasuk Caddy (~15 MB) dan sistem operasinya.
+512 MB pun masih cukup, meski tanpa banyak ruang bernapas.
+
+Disk: database berukuran beberapa ratus KB bahkan setelah ratusan transaksi.
+Yang tumbuh adalah bukti transfer — sekitar 200–400 KB per foto setelah
+dikompresi ke WebP. Untuk seluruh masa cicilan (±222 pembayaran), perkiraannya
+di bawah 100 MB.
+
+---
+
 ## Menjalankan di VPS
 
 Prasyarat: Docker + Docker Compose, dan **A record domain sudah mengarah ke IP

@@ -2,6 +2,26 @@ import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import sharp from "sharp";
+
+/**
+ * Bukti transfer berukuran seperti foto kamera HP sungguhan (beberapa MB),
+ * bukan PNG satu piksel. Batas bawaan body Server Action adalah 1 MB, jadi
+ * berkas mungil tidak akan pernah menyentuh batas itu — dan pernah membuat
+ * rangkaian uji ini lolos padahal semua unggahan foto asli gagal 413.
+ * Noise acak dipakai supaya JPEG-nya benar-benar tidak bisa dikompresi.
+ */
+async function fotoUji(namaFile: string, lebar: number, tinggi: number) {
+  const target = path.join(os.tmpdir(), namaFile);
+  if (!fs.existsSync(target)) {
+    const raw = Buffer.allocUnsafe(lebar * tinggi * 3);
+    for (let i = 0; i < raw.length; i += 1) raw[i] = Math.floor(Math.random() * 256);
+    await sharp(raw, { raw: { width: lebar, height: tinggi, channels: 3 } })
+      .jpeg({ quality: 92 })
+      .toFile(target);
+  }
+  return target;
+}
 
 /**
  * Uji alur nyata lewat browser: login kedua peran, catat pembayaran beserta
@@ -78,21 +98,16 @@ test("admin: catat pembayaran dengan bukti, saldo berkurang", async ({ page }) =
   await page.goto("/input");
   await page.getByRole("button", { name: "10 jt" }).click();
 
-  const bukti = path.join(os.tmpdir(), "bukti-test.png");
-  fs.writeFileSync(
-    bukti,
-    Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
-    ),
-  );
+  // ~3 MB: ukuran wajar foto bukti transfer dari HP.
+  const bukti = await fotoUji("bukti-3mb.jpg", 2200, 1700);
+  expect(fs.statSync(bukti).size).toBeGreaterThan(1024 * 1024);
   await page.locator('input[name="bukti"]').setInputFiles(bukti);
   await page.getByRole("button", { name: "Simpan pembayaran" }).click();
 
   // Diarahkan ke halaman detail transaksi yang baru dibuat.
   await expect(page).toHaveURL(/\/riwayat\/\d+/);
   await expect(page.getByText("Rp 10.000.000").first()).toBeVisible();
-  await expect(page.getByRole("img", { name: /bukti-test/i })).toBeVisible();
+  await expect(page.getByRole("img", { name: /bukti-3mb/i })).toBeVisible();
 
   // 1.108.550.000 - 10.000.000
   await page.goto("/");
