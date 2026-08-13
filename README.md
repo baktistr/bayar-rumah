@@ -222,6 +222,17 @@ Measured against the production image, not estimated:
 | RAM idle / typical / peak | ~55 MB / ~120 MB / ~131 MB |
 | CPU | ~0% idle, brief spike while processing a photo |
 | Disk | a few hundred KB for the database, ~150 KB per proof image |
+| **RAM to build** | **~1.7 GB** — see below |
+
+Building needs far more memory than running. `next build` peaks around 1.5 GB,
+more than ten times what the app then uses to serve. Measured in a constrained
+container: 1 GB is killed at exit 137, and it first completes at roughly 1.7 GB.
+
+So a 2 GB server that also runs a build tool has no headroom, and the build gets
+OOM-killed partway — often after `Compiled successfully` has already printed,
+because it's the type-check and static-generation phases that push it over. Give
+the machine 4 GB, add swap, or build the image elsewhere (see
+`.github/workflows/build.yml`, which publishes to GHCR).
 
 Proof images are compressed twice: resized to 1600px in the browser before
 upload (a 4 MB phone photo becomes ~230 KB), then re-encoded server-side to
