@@ -1,0 +1,93 @@
+name: Build and publish image
+
+# Membangun image di GitHub, bukan di VPS.
+#
+# `next build` memuncak di sekitar 1,5 GB — lebih dari sepuluh kali lipat
+# kebutuhan aplikasinya saat berjalan (~130 MB). Membangunnya di server yang
+# sama dengan aplikasi berarti menyediakan RAM yang 99% waktunya menganggur,
+# dan pada VPS 2 GB yang juga menjalankan Coolify, prosesnya kena OOM.
+#
+# Di sini VPS hanya menarik image yang sudah jadi.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Diperlukan agar GITHUB_TOKEN bawaan boleh mendorong ke GHCR.
+      # Tidak perlu membuat personal access token sendiri.
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Gerbang cepat sebelum membangun. Mendorong image yang tidak lolos
+      # typecheck ke registry hanya memindahkan kegagalan ke tahap deploy,
+      # di mana ia jauh lebih merepotkan.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint src e2e --max-warnings 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compose tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Satu arsitektur saja. Menambah arm64 menggandakan waktu build
+          # untuk sesuatu yang tidak dipakai VPS ini.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Opsional: memberitahu Coolify agar menarik image baru. Kalau kedua
+      # secret di bawah belum diisi, langkah ini dilewati tanpa menggagalkan
+      # workflow — image tetap terdorong dan bisa di-deploy manual.
+      - name: Trigger Coolify deploy
+        env:
+          WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "COOLIFY_WEBHOOK belum diset — lewati, deploy manual dari Coolify."
+            exit 0
+          fi
+          curl -fsS -X GET "$WEBHOOK" -H "Authorization: Bearer $TOKEN"
+          echo "Coolify diberi tahu."
