@@ -15,10 +15,30 @@ import {
   verifySession,
 } from "./session";
 
+/**
+ * Tanda tangan token yang sah belum cukup: versinya juga harus masih cocok
+ * dengan yang tercatat di database. Pemeriksaan ini yang membuat penggantian
+ * password benar-benar mencabut sesi lain, bukan sekadar mengubah hash.
+ *
+ * Satu query per request — tidak masalah untuk aplikasi dua pengguna, dan
+ * inilah harga dari sesi yang bisa dicabut.
+ */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  return verifySession(token);
+
+  const session = await verifySession(token);
+  if (!session) return null;
+
+  const row = await db.query.users.findFirst({
+    where: eq(users.id, session.id),
+    columns: { sessionVersion: true, role: true, name: true },
+  });
+  if (!row || row.sessionVersion !== session.sessionVersion) return null;
+
+  // Peran dan nama diambil ulang dari database, bukan dari token: kalau
+  // sewaktu-waktu diubah, perubahannya berlaku tanpa menunggu login ulang.
+  return { ...session, role: row.role, name: row.name };
 }
 
 /** Untuk Server Component: pengunjung tanpa sesi dilempar ke halaman login. */
@@ -50,40 +70,58 @@ export async function destroySessionCookie() {
 }
 
 /**
- * Rate limit login sederhana berbasis memori proses. Cukup untuk aplikasi
- * satu container dua pengguna; kalau nanti di-scale ke banyak instance,
- * ini perlu pindah ke penyimpanan bersama.
+ * Rate limit login berbasis memori proses. Cukup untuk satu container dua
+ * pengguna; kalau suatu saat di-scale ke banyak instance, ini harus pindah ke
+ * penyimpanan bersama.
+ *
+ * Dihitung pada DUA sumbu sekaligus:
+ *   - alamat IP  — menahan satu sumber yang mencoba banyak akun
+ *   - username   — menahan banyak sumber yang mengeroyok satu akun
+ *
+ * Sumbu username itu yang menentukan. IP diambil dari header X-Forwarded-For,
+ * dan header bisa dipalsukan; penyerang tinggal menggantinya tiap request
+ * untuk selalu mendapat jatah baru. Username yang sedang dibobol tidak bisa
+ * ikut dipalsukan, jadi batas ini tetap berlaku betapapun header diputar.
  */
 const attempts = new Map<string, { count: number; resetAt: number }>();
 const WINDOW_MS = 15 * 60 * 1000;
-const MAX_ATTEMPTS = 5;
+const MAX_PER_IP = 5;
+const MAX_PER_USERNAME = 10;
 
-export function checkRateLimit(key: string): { ok: boolean; retryInMin: number } {
+function limitFor(key: string, max: number) {
   const now = Date.now();
   const entry = attempts.get(key);
-
-  if (!entry || now > entry.resetAt) {
-    attempts.set(key, { count: 0, resetAt: now + WINDOW_MS });
-    return { ok: true, retryInMin: 0 };
-  }
-  if (entry.count >= MAX_ATTEMPTS) {
+  if (!entry || now > entry.resetAt) return { ok: true, retryInMin: 0 };
+  if (entry.count >= max) {
     return { ok: false, retryInMin: Math.ceil((entry.resetAt - now) / 60000) };
   }
   return { ok: true, retryInMin: 0 };
 }
 
-export function recordFailedAttempt(key: string) {
+export function checkRateLimit(
+  ip: string,
+  username: string,
+): { ok: boolean; retryInMin: number } {
+  const byIp = limitFor(`ip:${ip}`, MAX_PER_IP);
+  if (!byIp.ok) return byIp;
+  return limitFor(`user:${username.trim().toLowerCase()}`, MAX_PER_USERNAME);
+}
+
+export function recordFailedAttempt(ip: string, username: string) {
   const now = Date.now();
-  const entry = attempts.get(key);
-  if (!entry || now > entry.resetAt) {
-    attempts.set(key, { count: 1, resetAt: now + WINDOW_MS });
-  } else {
-    entry.count += 1;
+  for (const key of [`ip:${ip}`, `user:${username.trim().toLowerCase()}`]) {
+    const entry = attempts.get(key);
+    if (!entry || now > entry.resetAt) {
+      attempts.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    } else {
+      entry.count += 1;
+    }
   }
 }
 
-export function clearAttempts(key: string) {
-  attempts.delete(key);
+export function clearAttempts(ip: string, username: string) {
+  attempts.delete(`ip:${ip}`);
+  attempts.delete(`user:${username.trim().toLowerCase()}`);
 }
 
 export async function authenticate(
@@ -114,5 +152,6 @@ export async function authenticate(
     name: row.name,
     username: row.username,
     role: row.role,
+    sessionVersion: row.sessionVersion,
   };
 }

@@ -19,6 +19,14 @@ export const users = sqliteTable("users", {
   mustChangePassword: integer("must_change_password", { mode: "boolean" })
     .notNull()
     .default(false),
+  /**
+   * Dinaikkan setiap kali password diganti. Nilainya ikut ditanam di token
+   * sesi dan dicocokkan ulang tiap request, sehingga token lama — termasuk
+   * yang sudah dicuri — langsung tidak berlaku begitu password diganti.
+   * Tanpa ini, mengganti password tidak mengusir siapa pun, karena JWT
+   * bersifat stateless dan tetap sah sampai kedaluwarsa.
+   */
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
   lastLoginAt: integer("last_login_at"),
 });

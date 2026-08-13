@@ -6,7 +6,20 @@
 		max_size 12MB
 	}
 
-	reverse_proxy app:3000
+	header {
+		# Paksa HTTPS pada kunjungan berikutnya. Caddy tidak menambahkan ini
+		# sendiri, padahal aplikasinya menaruh cookie sesi.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		# Menimpa, bukan menambah: tanpa ini rantai X-Forwarded-For diawali
+		# nilai kiriman klien, dan rate limit login bisa dilewati dengan
+		# memalsukan header.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
 
 	log {
 		output stdout

@@ -16,10 +16,13 @@ export async function proxy(request: NextRequest) {
   const session = token ? await verifySession(token) : null;
 
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    // Yang sudah login tidak perlu melihat halaman login lagi.
-    if (pathname === "/login" && session) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
+    // Keputusan "sudah login, tidak perlu lihat /login lagi" TIDAK diambil di
+    // sini. Proxy hanya memverifikasi tanda tangan token; ia tidak tahu apakah
+    // versi sesinya masih berlaku. Token yang tanda tangannya sah tapi sudah
+    // dicabut akan dipantulkan ke "/", ditolak halaman, dikembalikan ke
+    // "/login", dan dipantulkan lagi — lingkaran redirect tanpa ujung.
+    // Halaman login sendiri yang memutuskannya, memakai pemeriksaan yang
+    // menyertakan database.
     return NextResponse.next();
   }
 

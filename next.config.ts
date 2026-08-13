@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
   // apa adanya saat runtime.
   serverExternalPackages: ["better-sqlite3", "sharp"],
 
+  // Tidak perlu mengumumkan framework dan versinya ke pemindai otomatis.
+  poweredByHeader: false,
+
   async headers() {
     return [
       {
@@ -21,6 +24,27 @@ const nextConfig: NextConfig = {
           // Aplikasi keluarga berisi data keuangan — jangan sampai muncul di
           // hasil pencarian bila suatu saat domainnya terekspos.
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          {
+            // Pertahanan berlapis. 'unsafe-inline' pada script terpaksa ada
+            // karena Next menyisipkan skrip inline (termasuk penentu tema);
+            // menghilangkannya butuh nonce per request. Nilai selebihnya tetap
+            // menutup jalur paling berguna bagi penyerang: memuat skrip dari
+            // domain lain, menyuntik <base>, membingkai halaman, dan
+            // mengirim data keluar lewat fetch.
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+            ].join("; "),
+          },
         ],
       },
     ];

@@ -20,21 +20,30 @@ trap cleanup EXIT
 echo "→ Membangun image…"
 docker build -t bayar-rumah:e2e . >/dev/null
 
-echo "→ Menjalankan container bersih di port ${PORT}…"
-docker rm -f "$NAME" >/dev/null 2>&1 || true
-docker run -d --name "$NAME" \
-  -p "127.0.0.1:${PORT}:3000" \
-  -e AUTH_SECRET="$(openssl rand -base64 32)" \
-  -e COOKIE_SECURE=false \
-  -e ADMIN_NAME=Bakti -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=rahasia12345 \
-  -e VIEWER_NAME=Ibu -e VIEWER_USERNAME=ibu -e VIEWER_PASSWORD=ibu12345678 \
-  -v "${DATA_DIR}:/app/data" \
-  bayar-rumah:e2e >/dev/null
+# Tiap berkas spec dijalankan terhadap container yang baru. Rangkaian uji ini
+# mengubah password dan status login — dijalankan berurutan dalam satu container,
+# spec yang belakangan akan mewarisi state milik spec sebelumnya.
+run_spec() {
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  rm -rf "${DATA_DIR:?}"/* 2>/dev/null || true
+  docker run -d --name "$NAME" \
+    -p "127.0.0.1:${PORT}:3000" \
+    -e AUTH_SECRET="$(openssl rand -base64 32)" \
+    -e COOKIE_SECURE=false \
+    -e ADMIN_NAME=Bakti -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=rahasia12345 \
+    -e VIEWER_NAME=Ibu -e VIEWER_USERNAME=ibu -e VIEWER_PASSWORD=ibu12345678 \
+    -v "${DATA_DIR}:/app/data" \
+    bayar-rumah:e2e >/dev/null
+  for _ in $(seq 1 60); do
+    curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1 && break
+    sleep 1
+  done
+  E2E_BASE_URL="http://127.0.0.1:${PORT}" npx playwright test "$1"
+}
 
-echo "→ Menunggu container siap…"
-for _ in $(seq 1 60); do
-  if curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then break; fi
-  sleep 1
+status=0
+for spec in e2e/*.spec.ts; do
+  echo "→ $spec"
+  run_spec "$spec" || status=1
 done
-
-E2E_BASE_URL="http://127.0.0.1:${PORT}" npx playwright test "$@"
+exit $status

@@ -8,6 +8,13 @@
       "when": 1786579573346,
       "tag": "0000_glossy_agent_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786587454116,
+      "tag": "0001_faithful_gateway",
+      "breakpoints": true
     }
   ]
 }

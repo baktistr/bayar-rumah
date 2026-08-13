@@ -9,6 +9,8 @@ export type SessionUser = {
   name: string;
   username: string;
   role: "ADMIN" | "VIEWER";
+  /** Dicocokkan dengan users.session_version untuk mencabut token lama. */
+  sessionVersion: number;
 };
 
 /**
@@ -32,6 +34,7 @@ export async function signSession(user: SessionUser): Promise<string> {
     name: user.name,
     username: user.username,
     role: user.role,
+    sv: user.sessionVersion,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(String(user.id))
@@ -51,6 +54,7 @@ export async function verifySession(token: string): Promise<SessionUser | null> 
       name: String(payload.name ?? ""),
       username: String(payload.username ?? ""),
       role,
+      sessionVersion: Number(payload.sv ?? 0),
     };
   } catch {
     return null;

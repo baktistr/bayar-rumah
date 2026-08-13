@@ -41,9 +41,12 @@ export async function GET(
         "Content-Length": String(buf.byteLength),
         // private: proxy bersama tidak boleh menyimpan bukti transfer.
         "Cache-Control": "private, max-age=31536000, immutable",
-        "Content-Disposition": `inline; filename="${encodeURIComponent(
-          row.originalName ?? fileName,
-        )}"`,
+        // Gambar tampil langsung di galeri, tapi PDF dipaksa diunduh: penampil
+        // PDF bawaan browser menjalankan JavaScript, dan menampilkannya inline
+        // berarti menjalankan berkas unggahan pada origin aplikasi ini.
+        "Content-Disposition": `${
+          row.mimeType === "application/pdf" ? "attachment" : "inline"
+        }; filename="${encodeURIComponent(row.originalName ?? fileName)}"`,
         "X-Content-Type-Options": "nosniff",
       },
     });
