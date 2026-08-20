@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: "BayarRumah",
   description: "Monitoring pembayaran rumah",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "BayarRumah", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "BayarRumah", statusBarStyle: "black-translucent" },
   // Aplikasi keluarga di balik login — tidak ada gunanya diindeks mesin pencari.
   robots: { index: false, follow: false },
 };
